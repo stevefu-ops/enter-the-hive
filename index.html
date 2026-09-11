@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>蜂巢突破 - Enter the Hive</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="game-wrapper">
+    <!-- Header Controls -->
+    <header class="top-nav">
+      <div class="brand">
+        <span class="hex-icon">⬢</span>
+        <h1 id="brand-title">蜂巢突破</h1>
+      </div>
+      <div class="nav-buttons">
+        <button id="btn-lang" class="nav-btn lang-btn" title="Switch Language / 切换语言">
+          <span class="btn-icon">🌐</span> <span id="lang-label">EN / 中文</span>
+        </button>
+        <button id="btn-playbook" class="nav-btn" title="查看战术手册 (Playbook)">
+          <span class="btn-icon">?</span> <span id="nav-playbook-text">战术手册</span>
+        </button>
+        <button id="btn-reset" class="nav-btn" title="重置关卡 (快捷键: R)">
+          <span class="btn-icon">↺</span> <span id="nav-reset-text">重置 (R)</span>
+        </button>
+        <div class="level-selector-wrapper">
+          <button id="btn-level" class="nav-btn" title="切换关卡 (Switch Level)">
+            <span class="btn-icon">⚏</span> <span id="level-title">第1防区</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Game Arena -->
+    <main class="main-stage">
+      <!-- Left / Center: Perspective Board Canvas Container -->
+      <div class="board-container">
+        <div class="goal-banner" id="goal-banner-el">
+          <span class="portal-pulse"></span>
+          <span id="goal-banner-text">▲ 蜂巢入口底线（主角与守卫必须双双抵达第5行）▲</span>
+          <span class="portal-pulse"></span>
+        </div>
+        <canvas id="gameCanvas" width="900" height="580"></canvas>
+        
+        <!-- Bottom Active Step Indicator -->
+        <div class="bottom-hud">
+          <div class="step-counter-box">
+            <span class="step-label" id="step-label-text">当前特工剩余步数:</span>
+            <div id="active-step-diamonds" class="diamonds-row">
+              <!-- Rendered dynamically -->
+            </div>
+            <span id="active-char-name" class="active-tag">主角 (推移者)</span>
+          </div>
+          <div class="control-hints" id="control-hints-text">
+            <span>[点击角色/Tab] 切换</span>
+            <span>[W/A/S/D/点击] 移动(后退返步)</span>
+            <span>[E / 点击晶石] 推移晶石(免费)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right HUD Panel -->
+      <aside class="right-hud">
+        <div class="panel-header" id="panel-header-text">参战特工</div>
+        
+        <!-- Guard / Defuser Card -->
+        <div id="card-guard" class="character-card" data-role="guard">
+          <div class="card-top">
+            <div class="avatar guard-avatar">
+              <span class="avatar-sym">🛡️</span>
+            </div>
+            <div class="char-info">
+              <div class="char-role-name" id="guard-name-text">守卫 (拆弹者)</div>
+              <div class="char-desc" id="guard-desc-text">解除安全阻挡门</div>
+            </div>
+          </div>
+          <div class="diamonds-indicator" id="guard-diamonds">
+            <!-- 7 diamonds -->
+          </div>
+        </div>
+
+        <!-- MC / Shifter Card -->
+        <div id="card-mc" class="character-card active" data-role="mc">
+          <div class="card-top">
+            <div class="avatar mc-avatar">
+              <span class="avatar-sym">👤</span>
+            </div>
+            <div class="char-info">
+              <div class="char-role-name" id="mc-name-text">主角 (推移者)</div>
+              <div class="char-desc" id="mc-desc-text">推移晶石障碍 (免费0步)</div>
+            </div>
+          </div>
+          <div class="diamonds-indicator" id="mc-diamonds">
+            <!-- 7 diamonds -->
+          </div>
+        </div>
+
+        <!-- Tactical Status Tip Section -->
+        <div class="action-section">
+          <div class="action-tip" id="action-tip">就绪：点击棋盘上特工可直接切换控制</div>
+        </div>
+
+        <!-- Level Objectives & Legend -->
+        <div class="legend-card">
+          <div class="legend-title" id="legend-title-text">战场情报与装置</div>
+          <div class="legend-item" id="legend-item-defuser">
+            <span class="item-badge defuser-badge">▲</span>
+            <span id="legend-defuser-text"><b>拆除节点 (金字塔)</b>: 守卫触发永久消除对应门</span>
+          </div>
+          <div class="legend-item" id="legend-item-blocker">
+            <span class="item-badge blocker-badge">☒</span>
+            <span id="legend-blocker-text"><b>阻挡门 (闸门)</b>: 无法通行，需守卫拆除</span>
+          </div>
+          <div class="legend-item" id="legend-item-shifter">
+            <span class="item-badge shifter-badge">◆</span>
+            <span id="legend-shifter-text"><b>晶石 (推移块)</b>: 主角可推入空位 (免费0步)</span>
+          </div>
+          <div class="legend-item" id="legend-item-wall">
+            <span class="item-badge wall-badge">⚡</span>
+            <span id="legend-wall-text"><b>激光阻隔网</b>: 边界高危防御设施</span>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Playbook Modal -->
+    <div id="playbook-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="playbook-modal-title">⬢ 战术渗透作战手册</h2>
+          <button id="btn-close-playbook" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body" id="playbook-body-content">
+          <!-- Dynamic localization body rendered by game.js -->
+        </div>
+        <div class="modal-footer">
+          <button id="btn-got-it" class="primary-modal-btn">进入战场 (ENGAGE)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Win / Lose Banner Modal -->
+    <div id="game-over-modal" class="modal-overlay hidden">
+      <div class="modal-card game-over-card">
+        <div id="game-over-icon" class="status-icon">🏆</div>
+        <h2 id="game-over-title">防区突破成功！</h2>
+        <p id="game-over-desc">主角与守卫双双成功进入蜂巢入口底线！</p>
+        <div class="modal-actions">
+          <button id="btn-next-level" class="primary-modal-btn">下一关卡</button>
+          <button id="btn-retry-level" class="secondary-modal-btn">重试 (R)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
