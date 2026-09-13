@@ -71,7 +71,7 @@
         <div id="card-guard" class="character-card" data-role="guard">
           <div class="card-top">
             <div class="avatar guard-avatar">
-              <span class="avatar-sym">🛡️</span>
+              <img src="assets/hive_guard_avatar.png" alt="Hive Guard" class="guard-avatar-img">
             </div>
             <div class="char-info">
               <div class="char-role-name" id="guard-name-text">守卫 (拆弹者)</div>
@@ -98,6 +98,39 @@
             <!-- 7 diamonds -->
           </div>
         </div>
+
+        <!-- Hive Guard Live Action Showcase Monitor -->
+        <section class="agent-anim-panel" id="agent-anim-panel">
+          <div class="anim-panel-header">
+            <div class="monitor-title-box">
+              <span class="pulse-dot"></span>
+              <span class="monitor-title" id="monitor-title-text">战术动作监视 · HIVE GUARD</span>
+            </div>
+            <span class="state-badge badge-idle" id="anim-state-badge">待机 (IDLE)</span>
+          </div>
+
+          <div class="anim-viewport-container">
+            <canvas id="charActionCanvas" width="340" height="340"></canvas>
+            <div class="hud-reticle"></div>
+            <div class="hud-corner top-left"></div>
+            <div class="hud-corner top-right"></div>
+            <div class="hud-corner bottom-left"></div>
+            <div class="hud-corner bottom-right"></div>
+            <div class="scanline-overlay"></div>
+          </div>
+
+          <div class="action-btn-row">
+            <button id="btn-anim-idle" class="action-btn active" data-action="idle" title="待机悬浮">
+              <span class="btn-sym">◈</span> <span id="label-anim-idle">待机</span>
+            </button>
+            <button id="btn-anim-walk" class="action-btn" data-action="walk" title="突进巡航">
+              <span class="btn-sym">▶</span> <span id="label-anim-walk">行走</span>
+            </button>
+            <button id="btn-anim-attack" class="action-btn" data-action="attack" title="裂空斩击攻坚">
+              <span class="btn-sym">⚔</span> <span id="label-anim-attack">攻击</span>
+            </button>
+          </div>
+        </section>
 
         <!-- Tactical Status Tip Section -->
         <div class="action-section">

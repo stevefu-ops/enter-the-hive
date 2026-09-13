@@ -132,6 +132,50 @@ class SoundFx {
       osc.stop(this.ctx.currentTime + i * 0.12 + 0.3);
     });
   }
+  playAttack() {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc1 = this.ctx.createOscillator();
+    const gain1 = this.ctx.createGain();
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(220, now);
+    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+    gain1.gain.setValueAtTime(0.18, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+    osc1.connect(gain1);
+    gain1.connect(this.ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.18);
+
+    const osc2 = this.ctx.createOscillator();
+    const gain2 = this.ctx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(700, now + 0.12);
+    osc2.frequency.exponentialRampToValueAtTime(140, now + 0.35);
+    gain2.gain.setValueAtTime(0.25, now + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+    osc2.connect(gain2);
+    gain2.connect(this.ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.4);
+  }
+  playThrust() {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(540, now + 0.12);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  }
 }
 
 const sfx = new SoundFx();
@@ -379,6 +423,623 @@ const LEVELS = [
   }
 ];
 
+/**
+ * High-Definition Tactical Action Monitor for Hive Guard
+ * Renders IDLE, WALK, and ATTACK sequences with dynamic cyber lighting, 
+ * particle physics, volumetric shadows, wing articulation, and screen shake.
+ */
+class ActionStageRenderer {
+  constructor(canvasId, game) {
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext('2d');
+    this.game = game;
+    this.state = 'idle'; // 'idle' | 'walk' | 'attack'
+    this.stateTimer = 0;
+    this.stateDuration = 0;
+    this.animTime = 0;
+    this.attackPhase = 0;
+    this.attackElapsed = 0;
+    this.shake = { x: 0, y: 0, timer: 0, intensity: 0 };
+
+    // High-resolution sprite
+    this.sprite = new Image();
+    this.sprite.src = 'assets/hive_guard_front.png';
+    this.spriteLoaded = false;
+    this.sprite.onload = () => {
+      this.spriteLoaded = true;
+    };
+
+    // Ambient floating particles
+    this.ambientParticles = [];
+    for (let i = 0; i < 28; i++) {
+      this.ambientParticles.push({
+        x: Math.random() * 340,
+        y: Math.random() * 340,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: -0.4 - Math.random() * 0.8,
+        size: 1.5 + Math.random() * 2.5,
+        life: Math.random(),
+        decay: 0.006 + Math.random() * 0.008,
+        color: Math.random() > 0.4 ? '#00f2fe' : '#ffb800'
+      });
+    }
+
+    // Dynamic particle bursts for walk/attack
+    this.fxParticles = [];
+
+    // Speedlines for walk
+    this.speedlines = [];
+
+    // Slash arcs for attack
+    this.slashArcs = [];
+
+    // DOM References
+    this.badgeEl = document.getElementById('anim-state-badge');
+    this.btnIdle = document.getElementById('btn-anim-idle');
+    this.btnWalk = document.getElementById('btn-anim-walk');
+    this.btnAttack = document.getElementById('btn-anim-attack');
+    this.monitorTitleText = document.getElementById('monitor-title-text');
+    this.labelIdle = document.getElementById('label-anim-idle');
+    this.labelWalk = document.getElementById('label-anim-walk');
+    this.labelAttack = document.getElementById('label-anim-attack');
+
+    this.setupListeners();
+    this.updateHUD();
+  }
+
+  setupListeners() {
+    if (this.btnIdle) {
+      this.btnIdle.addEventListener('click', () => {
+        this.setState('idle');
+      });
+    }
+    if (this.btnWalk) {
+      this.btnWalk.addEventListener('click', () => {
+        this.triggerWalk(1.8);
+        sfx.playThrust();
+      });
+    }
+    if (this.btnAttack) {
+      this.btnAttack.addEventListener('click', () => {
+        this.triggerAttack(1.6);
+        sfx.playAttack();
+      });
+    }
+  }
+
+  setState(newState, duration = 0) {
+    this.state = newState;
+    this.stateDuration = duration;
+    this.stateTimer = duration;
+    this.updateHUD();
+  }
+
+  triggerWalk(duration = 1.3) {
+    this.setState('walk', duration);
+    this.speedlines = [];
+    for (let i = 0; i < 18; i++) {
+      this.speedlines.push({
+        x: Math.random() * 340,
+        y: 40 + Math.random() * 260,
+        len: 40 + Math.random() * 90,
+        speed: 9 + Math.random() * 15,
+        alpha: 0.3 + Math.random() * 0.6
+      });
+    }
+  }
+
+  triggerAttack(duration = 1.6) {
+    this.setState('attack', duration);
+    this.slashArcs = [];
+    this.attackPhase = 0;
+    this.attackElapsed = 0;
+  }
+
+  updateHUD() {
+    if (!this.badgeEl) return;
+    const isZh = (!this.game || this.game.lang === 'zh');
+    this.badgeEl.className = 'state-badge';
+
+    if (this.state === 'idle') {
+      this.badgeEl.classList.add('badge-idle');
+      this.badgeEl.innerText = isZh ? '待机警戒 (IDLE)' : 'IDLE';
+    } else if (this.state === 'walk') {
+      this.badgeEl.classList.add('badge-walk');
+      this.badgeEl.innerText = isZh ? '巡航移动 (WALK)' : 'WALK';
+    } else if (this.state === 'attack') {
+      this.badgeEl.classList.add('badge-attack');
+      this.badgeEl.innerText = isZh ? '攻坚突击 (ATTACK)' : 'ATTACK';
+    }
+
+    [this.btnIdle, this.btnWalk, this.btnAttack].forEach(btn => {
+      if (btn) btn.classList.remove('active');
+    });
+    if (this.state === 'idle' && this.btnIdle) this.btnIdle.classList.add('active');
+    if (this.state === 'walk' && this.btnWalk) this.btnWalk.classList.add('active');
+    if (this.state === 'attack' && this.btnAttack) this.btnAttack.classList.add('active');
+  }
+
+  updateLanguage(lang) {
+    const isZh = (lang === 'zh');
+    if (this.monitorTitleText) {
+      this.monitorTitleText.innerText = isZh ? '战术动作监视 · HIVE GUARD' : 'TACTICAL MONITOR · HIVE GUARD';
+    }
+    if (this.labelIdle) this.labelIdle.innerText = isZh ? '待机' : 'Idle';
+    if (this.labelWalk) this.labelWalk.innerText = isZh ? '行走' : 'Walk';
+    if (this.labelAttack) this.labelAttack.innerText = isZh ? '攻击' : 'Attack';
+    this.updateHUD();
+  }
+
+  update(dt = 0.016) {
+    this.animTime += dt;
+
+    // Countdown state duration
+    if (this.stateTimer > 0) {
+      this.stateTimer -= dt;
+      if (this.stateTimer <= 0) {
+        this.setState('idle');
+      }
+    }
+
+    // Screen shake decay
+    if (this.shake.timer > 0) {
+      this.shake.timer -= dt;
+      const factor = Math.max(0, this.shake.timer / 0.35);
+      const mag = this.shake.intensity * factor;
+      this.shake.x = (Math.random() - 0.5) * mag;
+      this.shake.y = (Math.random() - 0.5) * mag;
+    } else {
+      this.shake.x = 0;
+      this.shake.y = 0;
+    }
+
+    // Ambient floating particles
+    this.ambientParticles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0 || p.y < 10) {
+        p.x = 40 + Math.random() * 260;
+        p.y = 310 + Math.random() * 25;
+        p.life = 1;
+      }
+    });
+
+    // FX particles update
+    for (let i = this.fxParticles.length - 1; i >= 0; i--) {
+      const p = this.fxParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0) {
+        this.fxParticles.splice(i, 1);
+      }
+    }
+
+    // Slash arcs update
+    for (let i = this.slashArcs.length - 1; i >= 0; i--) {
+      const s = this.slashArcs[i];
+      s.life -= s.decay;
+      if (s.life <= 0) {
+        this.slashArcs.splice(i, 1);
+      }
+    }
+
+    // Attack state sequencing
+    if (this.state === 'attack') {
+      this.attackElapsed = (this.stateDuration - this.stateTimer);
+      // Phase 1: Trigger slashes at 0.28s
+      if (this.attackElapsed >= 0.28 && this.attackPhase === 0) {
+        this.attackPhase = 1;
+        this.slashArcs.push({
+          startAngle: -Math.PI * 0.75,
+          endAngle: Math.PI * 0.25,
+          radius: 88,
+          color: '#00f2fe',
+          glow: '#4facfe',
+          life: 1.0,
+          decay: 0.045,
+          cx: 170,
+          cy: 160
+        });
+        this.slashArcs.push({
+          startAngle: Math.PI * 0.2,
+          endAngle: Math.PI * 1.15,
+          radius: 104,
+          color: '#ffb800',
+          glow: '#ff8800',
+          life: 1.0,
+          decay: 0.045,
+          cx: 170,
+          cy: 160
+        });
+      }
+      // Phase 2: Impact shockwave & particles at 0.45s
+      if (this.attackElapsed >= 0.45 && this.attackPhase === 1) {
+        this.attackPhase = 2;
+        this.shake.timer = 0.35;
+        this.shake.intensity = 15;
+        for (let k = 0; k < 36; k++) {
+          const angle = Math.random() * Math.PI * 2;
+          const spd = 3 + Math.random() * 8.5;
+          this.fxParticles.push({
+            x: 170 + Math.cos(angle) * 15,
+            y: 160 + Math.sin(angle) * 15,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            life: 1.0,
+            decay: 0.024 + Math.random() * 0.03,
+            size: 3 + Math.random() * 4,
+            color: Math.random() > 0.45 ? '#00f2fe' : (Math.random() > 0.5 ? '#ffb800' : '#ff3366')
+          });
+        }
+      }
+    }
+
+    // Walk state speedlines
+    if (this.state === 'walk') {
+      this.speedlines.forEach(l => {
+        l.x -= l.speed;
+        if (l.x + l.len < 0) {
+          l.x = 340 + Math.random() * 30;
+          l.y = 40 + Math.random() * 260;
+        }
+      });
+      if (Math.random() < 0.6) {
+        this.fxParticles.push({
+          x: 170 - 25 + (Math.random() - 0.5) * 20,
+          y: 205 + (Math.random() - 0.5) * 20,
+          vx: -3.5 - Math.random() * 4.5,
+          vy: (Math.random() - 0.5) * 2.2,
+          life: 1.0,
+          decay: 0.055,
+          size: 2.5 + Math.random() * 2.5,
+          color: '#00f2fe'
+        });
+      }
+    }
+  }
+
+  render() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    ctx.save();
+    ctx.clearRect(0, 0, w, h);
+
+    // Camera shake translation
+    if (this.shake.timer > 0) {
+      ctx.translate(this.shake.x, this.shake.y);
+    }
+
+    const cx = w / 2;
+    const cy = h * 0.52;
+
+    // 1. Cyber Hexagonal & Radial Grid Backdrop
+    this.drawCyberBackdrop(ctx, cx, cy);
+
+    // 2. Ambient Floating Motes
+    this.drawAmbientMotes(ctx);
+
+    // 3. Walk Speedlines
+    if (this.state === 'walk') {
+      this.drawSpeedlines(ctx);
+    }
+
+    // 4. 3D Floating Cyber Pedestal Dais
+    this.drawPedestal(ctx, cx, cy + 96);
+
+    // 5. Render Character with Dynamic State Animations
+    this.drawCharacter(ctx, cx, cy);
+
+    // 6. Attack Slash Visual Effects & Shockwaves
+    if (this.slashArcs.length > 0 || this.attackPhase >= 2) {
+      this.drawAttackFX(ctx);
+    }
+
+    // 7. Dynamic FX Particles
+    this.drawFXParticles(ctx);
+
+    ctx.restore();
+  }
+
+  drawCyberBackdrop(ctx, cx, cy) {
+    // Holographic concentric rings
+    ctx.save();
+    ctx.lineWidth = 1;
+    [60, 110, 150].forEach((r, idx) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0, 242, 254, ${0.08 - idx * 0.02})`;
+      ctx.stroke();
+    });
+
+    // Rotating radial ticks
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(this.animTime * 0.4);
+    ctx.strokeStyle = 'rgba(0, 242, 254, 0.18)';
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(135, 0);
+      ctx.lineTo(145, 0);
+      ctx.stroke();
+      ctx.rotate(Math.PI / 4);
+    }
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  drawAmbientMotes(ctx) {
+    ctx.save();
+    this.ambientParticles.forEach(p => {
+      ctx.globalAlpha = p.life * 0.7;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  drawSpeedlines(ctx) {
+    ctx.save();
+    this.speedlines.forEach(l => {
+      ctx.globalAlpha = l.alpha;
+      ctx.strokeStyle = '#00f2fe';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(l.x + l.len, l.y);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  drawPedestal(ctx, cx, cy) {
+    ctx.save();
+
+    // 1. Lower drop shadow on floor
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 18, 95, 26, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fill();
+
+    // 2. Base platform slab (3D thickness)
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 10, 85, 22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 18, 32, 0.95)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 3. Glowing upper dais
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 4, 78, 20, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 242, 254, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+
+    // 4. Rotating inner holographic energy ring
+    ctx.save();
+    ctx.translate(cx, cy + 4);
+    ctx.scale(1, 0.26);
+    ctx.rotate(this.animTime * 1.5);
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 68, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 184, 0, 0.7)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  drawCharacter(ctx, cx, cy) {
+    if (!this.spriteLoaded || !this.sprite) return;
+
+    ctx.save();
+
+    let hoverY = 0;
+    let surgeX = 0;
+    let tilt = 0;
+    let scaleX = 1;
+    let scaleY = 1;
+
+    // Calculate motion variables by state
+    if (this.state === 'idle') {
+      hoverY = Math.sin(this.animTime * 2.6) * 9;
+      scaleX = 1 + Math.sin(this.animTime * 2.6) * 0.025;
+      scaleY = 1 - Math.sin(this.animTime * 2.6) * 0.015;
+    } else if (this.state === 'walk') {
+      hoverY = Math.sin(this.animTime * 8) * 7;
+      surgeX = Math.sin(this.animTime * 8) * 8 + 14;
+      tilt = 0.18; // ~10.3 degrees forward tilt
+      scaleX = 0.97;
+    } else if (this.state === 'attack') {
+      if (this.attackElapsed < 0.28) {
+        // Charging phase: pull back and expand wings
+        const p = this.attackElapsed / 0.28;
+        surgeX = -18 * p;
+        hoverY = -14 * p;
+        tilt = -0.12 * p;
+        scaleX = 1 + 0.16 * p;
+        scaleY = 1 + 0.08 * p;
+      } else if (this.attackElapsed < 0.55) {
+        // Strike phase: violent forward thrust
+        const p = (this.attackElapsed - 0.28) / 0.27;
+        surgeX = -18 + 58 * p;
+        hoverY = -14 + 18 * p;
+        tilt = -0.12 + 0.36 * p;
+        scaleX = 1.16 - 0.12 * p;
+      } else {
+        // Recovery phase: return smoothly to neutral
+        const p = Math.min(1, (this.attackElapsed - 0.55) / 1.05);
+        const ease = 1 - Math.pow(1 - p, 3);
+        surgeX = 40 * (1 - ease);
+        hoverY = 4 * (1 - ease);
+        tilt = 0.24 * (1 - ease);
+        scaleX = 1.04 - 0.04 * ease;
+      }
+    }
+
+    // Dynamic ground contact shadow scaling with height
+    const shadowScale = Math.max(0.5, 1 - (hoverY / 35));
+    ctx.beginPath();
+    ctx.ellipse(cx + surgeX * 0.4, cy + 96, 55 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fill();
+
+    // Radial Backlight Aura
+    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY, 15, cx + surgeX, cy - 20 + hoverY, 120);
+    if (this.state === 'attack') {
+      auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.45)');
+      auraGrad.addColorStop(0.5, 'rgba(0, 242, 254, 0.25)');
+    } else {
+      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.35)');
+      auraGrad.addColorStop(0.5, 'rgba(79, 172, 254, 0.15)');
+    }
+    auraGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(cx + surgeX, cy - 20 + hoverY, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    const charW = 186;
+    const charH = (charW / this.sprite.naturalWidth) * this.sprite.naturalHeight;
+
+    // Ghosting motion trails for Walk
+    if (this.state === 'walk') {
+      [18, 36].forEach((offset, idx) => {
+        ctx.save();
+        ctx.globalAlpha = 0.25 - idx * 0.12;
+        ctx.translate(cx + surgeX - offset, cy + hoverY);
+        ctx.rotate(tilt);
+        ctx.drawImage(this.sprite, -charW / 2, -charH / 2 - 10, charW, charH);
+        ctx.restore();
+      });
+    }
+
+    // Main Character Rendering
+    ctx.save();
+    ctx.translate(cx + surgeX, cy + hoverY);
+    ctx.rotate(tilt);
+    ctx.scale(scaleX, scaleY);
+    ctx.drawImage(this.sprite, -charW / 2, -charH / 2 - 10, charW, charH);
+
+    // Glowing cyan eye dots on the character mask
+    ctx.beginPath();
+    ctx.arc(-5, -charH / 2 + 38, 2, 0, Math.PI * 2);
+    ctx.arc(6, -charH / 2 + 38, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#00f2fe';
+    ctx.shadowColor = '#00f2fe';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+
+    // Glowing chest cavity core
+    const corePulse = 0.5 + Math.sin(this.animTime * 4) * 0.4;
+    ctx.beginPath();
+    ctx.arc(0, -charH / 2 + 82, 5, 0, Math.PI * 2);
+    ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowBlur = 12 * corePulse;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Scanning laser beam across character in Idle
+    if (this.state === 'idle') {
+      const scanY = cy - 80 + Math.sin(this.animTime * 2.2) * 90;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 70, scanY);
+      ctx.lineTo(cx + 70, scanY);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  drawAttackFX(ctx) {
+    ctx.save();
+
+    // 1. Dual Curved Energy Claw Slash Arcs
+    this.slashArcs.forEach(s => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, s.life);
+      ctx.lineWidth = 7 * s.life;
+      ctx.strokeStyle = s.color;
+      ctx.shadowColor = s.glow;
+      ctx.shadowBlur = 18;
+
+      ctx.beginPath();
+      ctx.arc(s.cx + 20, s.cy, s.radius, s.startAngle, s.endAngle);
+      ctx.stroke();
+
+      // Sharp blade flare cap
+      const capX = (s.cx + 20) + Math.cos(s.endAngle) * s.radius;
+      const capY = s.cy + Math.sin(s.endAngle) * s.radius;
+      ctx.beginPath();
+      ctx.arc(capX, capY, 8 * s.life, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 20;
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // 2. Expanding shockwave ring at impact
+    if (this.attackPhase >= 2 && this.attackElapsed < 0.85) {
+      const p = (this.attackElapsed - 0.45) / 0.4;
+      const ringRadius = 20 + p * 110;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - p);
+      ctx.strokeStyle = '#00f2fe';
+      ctx.lineWidth = 3.5 * (1 - p);
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(190, 160, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  drawFXParticles(ctx) {
+    ctx.save();
+    this.fxParticles.forEach(p => {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * Math.max(0.2, p.life), 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+}
+
 class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
@@ -393,6 +1054,13 @@ class Game {
     this.hoverCell = null;
     this.particles = [];
     this.animTime = 0;
+
+    // Load Hive Guard transparent sprite for chessboard & side monitor
+    this.hiveGuardSprite = new Image();
+    this.hiveGuardSprite.src = 'assets/hive_guard_front.png';
+
+    // Initialize side tactical action showcase monitor
+    this.actionStage = new ActionStageRenderer('charActionCanvas', this);
 
     this.initDOM();
     this.applyLanguage();
@@ -477,6 +1145,9 @@ class Game {
 
     this.renderPlaybookContent();
     this.updateLevelTitle();
+    if (this.actionStage) {
+      this.actionStage.updateLanguage(this.lang);
+    }
     if (this.state) {
       this.updateHUD();
       this.updateActionTip();
@@ -888,6 +1559,9 @@ class Game {
         char.steps = Math.min(this.maxSteps, char.steps + 1);
         sfx.playStepBack();
         this.spawnSparks(tx, ty, '#00ff88');
+        if (this.activeRole === 'guard' && this.actionStage) {
+          this.actionStage.triggerWalk(1.2);
+        }
       } else {
         if (char.steps <= 0) {
           this.checkEndState();
@@ -901,10 +1575,17 @@ class Game {
         this.spawnSparks(tx, ty, this.activeRole === 'mc' ? '#00f2fe' : '#ffb800');
 
         if (this.activeRole === 'guard') {
+          if (this.actionStage) {
+            this.actionStage.triggerWalk(1.2);
+          }
           const defuser = this.state.defusers.find(d => !d.defused && d.x === tx && d.y === ty);
           if (defuser) {
             defuser.defused = true;
             sfx.playDefuse();
+            sfx.playAttack();
+            if (this.actionStage) {
+              this.actionStage.triggerAttack(1.6);
+            }
             const targetBlocker = this.state.blockers.find(b => b.id === defuser.linkedBlockerId);
             if (targetBlocker) {
               targetBlocker.defused = true;
@@ -1061,6 +1742,10 @@ class Game {
 
   loop() {
     this.animTime += 0.03;
+    if (this.actionStage) {
+      this.actionStage.update(0.03);
+      this.actionStage.render();
+    }
     this.render();
     requestAnimationFrame(() => this.loop());
   }
@@ -1762,29 +2447,66 @@ class Game {
       ctx.restore();
     }
 
-    // 4. 3D Volumetric Operative Sphere
-    ctx.beginPath();
-    ctx.arc(x, py, radius, 0, Math.PI * 2);
-    const sphereGrad = ctx.createRadialGradient(x - radius * 0.35, py - radius * 0.35, 2, x, py, radius);
-    sphereGrad.addColorStop(0, '#ffffff');
-    sphereGrad.addColorStop(0.25, primaryColor);
-    sphereGrad.addColorStop(0.8, darkColor);
-    sphereGrad.addColorStop(1, '#050c18');
-    ctx.fillStyle = sphereGrad;
-    ctx.fill();
-    ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = isSelected ? 2.2 : 1.5;
-    ctx.stroke();
+    if (role === 'guard' && this.hiveGuardSprite && this.hiveGuardSprite.complete && this.hiveGuardSprite.naturalWidth > 0) {
+      // 3D Hive Guard Figurine on Isometric Board
+      const spriteW = 46;
+      const spriteH = (spriteW / this.hiveGuardSprite.naturalWidth) * this.hiveGuardSprite.naturalHeight;
+      const spriteX = x - spriteW / 2;
+      const spriteY = py - spriteH + 18;
 
-    // 5. Operative Avatar Emoji Icon
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(role === 'mc' ? '👤' : '🛡️', x, py);
+      ctx.save();
+      // Backlight aura
+      const auraGrad = ctx.createRadialGradient(x, py - 18, 4, x, py - 18, 28);
+      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.4)');
+      auraGrad.addColorStop(0.6, 'rgba(255, 184, 0, 0.25)');
+      auraGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(x, py - 18, 28, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wing breathing subtle scale
+      const breathScale = 1 + Math.sin(this.animTime * 3) * 0.03;
+      ctx.translate(x, py - 18);
+      ctx.scale(breathScale, 1);
+      ctx.translate(-x, -(py - 18));
+
+      ctx.drawImage(this.hiveGuardSprite, spriteX, spriteY, spriteW, spriteH);
+      ctx.restore();
+
+      // Glowing cyan eye dots on mini sprite
+      ctx.beginPath();
+      ctx.arc(x - 2, spriteY + 12, 1.2, 0, Math.PI * 2);
+      ctx.arc(x + 2, spriteY + 12, 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 5;
+      ctx.fill();
+    } else {
+      // 4. 3D Volumetric Operative Sphere
+      ctx.beginPath();
+      ctx.arc(x, py, radius, 0, Math.PI * 2);
+      const sphereGrad = ctx.createRadialGradient(x - radius * 0.35, py - radius * 0.35, 2, x, py, radius);
+      sphereGrad.addColorStop(0, '#ffffff');
+      sphereGrad.addColorStop(0.25, primaryColor);
+      sphereGrad.addColorStop(0.8, darkColor);
+      sphereGrad.addColorStop(1, '#050c18');
+      ctx.fillStyle = sphereGrad;
+      ctx.fill();
+      ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = isSelected ? 2.2 : 1.5;
+      ctx.stroke();
+
+      // 5. Operative Avatar Emoji Icon
+      ctx.font = '16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(role === 'mc' ? '👤' : '🛡️', x, py);
+    }
 
     // 6. Holographic Step Count Floating Badge
     ctx.beginPath();
-    ctx.arc(x + 13, py - 13, 8, 0, Math.PI * 2);
+    ctx.arc(x + 15, py - 16, 8, 0, Math.PI * 2);
     ctx.fillStyle = primaryColor;
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
@@ -1792,7 +2514,7 @@ class Game {
     ctx.stroke();
     ctx.font = 'bold 10px Orbitron, sans-serif';
     ctx.fillStyle = '#05080e';
-    ctx.fillText(char.steps.toString(), x + 13, py - 12);
+    ctx.fillText(char.steps.toString(), x + 15, py - 15);
 
     // 7. Goal Secured Overhead Tag
     if (char.y === this.state.goalRow) {
@@ -1800,7 +2522,7 @@ class Game {
       ctx.fillStyle = '#00ff88';
       ctx.shadowColor = '#00ff88';
       ctx.shadowBlur = 8;
-      ctx.fillText(t.canvasSecured, x, py - 26);
+      ctx.fillText(t.canvasSecured, x, py - 30);
     }
 
     ctx.restore();
