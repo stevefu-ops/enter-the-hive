@@ -2398,28 +2398,30 @@ class Game {
     const isSelected = this.activeRole === role;
     const floatY = Math.sin(this.animTime * 3 + (role === 'mc' ? 0 : Math.PI)) * 4;
     const py = y - 14 + floatY;
-    const radius = 18;
+    // Perspective row scale: makes characters significantly larger and nicely scaled with isometric depth
+    const rowScale = 0.95 + (1 - char.y / 5) * 0.35; // 0.95 at back (Y=5), 1.3 at front (Y=0)
+    const radius = 22 * rowScale;
     const primaryColor = role === 'mc' ? '#00f2fe' : '#ffb800';
     const darkColor = role === 'mc' ? '#005577' : '#885500';
     const t = I18N[this.lang];
 
     // 1. Dynamic Ground Contact Shadow on Tile
-    const shadowScale = 1 - (floatY / 18);
+    const shadowScale = (1 - (floatY / 18)) * rowScale;
     ctx.beginPath();
-    ctx.ellipse(x, y + 4, radius * 1.35 * shadowScale, radius * 0.6 * shadowScale, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.ellipse(x, y + 5, (role === 'guard' ? 32 : 24) * shadowScale, (role === 'guard' ? 11 : 9) * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     ctx.fill();
 
     // 2. 3D Floating Cyber-Pedestal Base
-    const pedestalY = py + radius * 0.75;
+    const pedestalY = py + (role === 'guard' ? 14 : radius * 0.75);
     ctx.beginPath();
-    ctx.ellipse(x, pedestalY + 3, radius * 1.3, radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, pedestalY + 3, radius * 1.3, radius * 0.48, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(12, 22, 38, 0.9)';
     ctx.fill();
 
     ctx.beginPath();
-    ctx.ellipse(x, pedestalY, radius * 1.2, radius * 0.45, 0, 0, Math.PI * 2);
-    ctx.fillStyle = role === 'mc' ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 184, 0, 0.2)';
+    ctx.ellipse(x, pedestalY, radius * 1.2, radius * 0.42, 0, 0, Math.PI * 2);
+    ctx.fillStyle = role === 'mc' ? 'rgba(0, 242, 254, 0.25)' : 'rgba(255, 184, 0, 0.25)';
     ctx.fill();
     ctx.strokeStyle = primaryColor;
     ctx.lineWidth = isSelected ? 2.5 : 1.5;
@@ -2435,12 +2437,12 @@ class Game {
       ctx.save();
       ctx.translate(x, pedestalY);
       ctx.rotate(this.animTime * 1.5);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 1.2;
       for (let a = 0; a < 4; a++) {
         ctx.beginPath();
         ctx.moveTo(radius * 1.35, 0);
-        ctx.lineTo(radius * 1.55, 0);
+        ctx.lineTo(radius * 1.6, 0);
         ctx.stroke();
         ctx.rotate(Math.PI / 2);
       }
@@ -2448,42 +2450,75 @@ class Game {
     }
 
     if (role === 'guard' && this.hiveGuardSprite && this.hiveGuardSprite.complete && this.hiveGuardSprite.naturalWidth > 0) {
-      // 3D Hive Guard Figurine on Isometric Board
-      const spriteW = 46;
+      // Substantially enlarged 3D Hive Guard Figurine on Isometric Board
+      const baseW = 76; // Significantly increased size
+      const spriteW = baseW * rowScale;
       const spriteH = (spriteW / this.hiveGuardSprite.naturalWidth) * this.hiveGuardSprite.naturalHeight;
       const spriteX = x - spriteW / 2;
       const spriteY = py - spriteH + 18;
 
       ctx.save();
       // Backlight aura
-      const auraGrad = ctx.createRadialGradient(x, py - 18, 4, x, py - 18, 28);
-      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.4)');
+      const auraGrad = ctx.createRadialGradient(x, py - 32, 6, x, py - 32, 45 * rowScale);
+      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.45)');
       auraGrad.addColorStop(0.6, 'rgba(255, 184, 0, 0.25)');
       auraGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = auraGrad;
       ctx.beginPath();
-      ctx.arc(x, py - 18, 28, 0, Math.PI * 2);
+      ctx.arc(x, py - 32, 45 * rowScale, 0, Math.PI * 2);
       ctx.fill();
 
       // Wing breathing subtle scale
       const breathScale = 1 + Math.sin(this.animTime * 3) * 0.03;
-      ctx.translate(x, py - 18);
+      ctx.translate(x, py - 32);
       ctx.scale(breathScale, 1);
-      ctx.translate(-x, -(py - 18));
+      ctx.translate(-x, -(py - 32));
 
       ctx.drawImage(this.hiveGuardSprite, spriteX, spriteY, spriteW, spriteH);
       ctx.restore();
 
-      // Glowing cyan eye dots on mini sprite
+      // Glowing cyan eye dots on sprite
+      const eyeY = spriteY + spriteH * 0.18;
       ctx.beginPath();
-      ctx.arc(x - 2, spriteY + 12, 1.2, 0, Math.PI * 2);
-      ctx.arc(x + 2, spriteY + 12, 1.2, 0, Math.PI * 2);
+      ctx.arc(x - 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
+      ctx.arc(x + 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
       ctx.fillStyle = '#00f2fe';
       ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 6;
       ctx.fill();
+
+      // Glowing chest core
+      ctx.beginPath();
+      ctx.arc(x, spriteY + spriteH * 0.32, 2.5 * rowScale, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+
+      // Holographic Step Count Floating Badge
+      ctx.beginPath();
+      ctx.arc(x + 24 * rowScale, spriteY + 22, 9, 0, Math.PI * 2);
+      ctx.fillStyle = primaryColor;
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      ctx.font = 'bold 11px Orbitron, sans-serif';
+      ctx.fillStyle = '#05080e';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(char.steps.toString(), x + 24 * rowScale, spriteY + 22);
+
+      // Goal Secured Overhead Tag
+      if (char.y === this.state.goalRow) {
+        ctx.font = 'bold 11px Orbitron, "Noto Sans SC", sans-serif';
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 8;
+        ctx.fillText(t.canvasSecured, x, spriteY - 8);
+      }
     } else {
-      // 4. 3D Volumetric Operative Sphere
+      // 4. 3D Volumetric Operative Sphere for MC
       ctx.beginPath();
       ctx.arc(x, py, radius, 0, Math.PI * 2);
       const sphereGrad = ctx.createRadialGradient(x - radius * 0.35, py - radius * 0.35, 2, x, py, radius);
@@ -2498,31 +2533,31 @@ class Game {
       ctx.stroke();
 
       // 5. Operative Avatar Emoji Icon
-      ctx.font = '16px sans-serif';
+      ctx.font = `${Math.round(18 * rowScale)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(role === 'mc' ? '👤' : '🛡️', x, py);
-    }
 
-    // 6. Holographic Step Count Floating Badge
-    ctx.beginPath();
-    ctx.arc(x + 15, py - 16, 8, 0, Math.PI * 2);
-    ctx.fillStyle = primaryColor;
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.font = 'bold 10px Orbitron, sans-serif';
-    ctx.fillStyle = '#05080e';
-    ctx.fillText(char.steps.toString(), x + 15, py - 15);
+      // Holographic Step Count Floating Badge
+      ctx.beginPath();
+      ctx.arc(x + 16, py - 16, 9, 0, Math.PI * 2);
+      ctx.fillStyle = primaryColor;
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      ctx.font = 'bold 11px Orbitron, sans-serif';
+      ctx.fillStyle = '#05080e';
+      ctx.fillText(char.steps.toString(), x + 16, py - 15);
 
-    // 7. Goal Secured Overhead Tag
-    if (char.y === this.state.goalRow) {
-      ctx.font = 'bold 10px Orbitron, "Noto Sans SC", sans-serif';
-      ctx.fillStyle = '#00ff88';
-      ctx.shadowColor = '#00ff88';
-      ctx.shadowBlur = 8;
-      ctx.fillText(t.canvasSecured, x, py - 30);
+      // Goal Secured Overhead Tag
+      if (char.y === this.state.goalRow) {
+        ctx.font = 'bold 11px Orbitron, "Noto Sans SC", sans-serif';
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 8;
+        ctx.fillText(t.canvasSecured, x, py - 30);
+      }
     }
 
     ctx.restore();
