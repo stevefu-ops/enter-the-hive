@@ -241,7 +241,12 @@ const I18N = {
     btnRetry: "重试当前防区 (R)",
     btnReplayFinal: "重玩第5防区",
     canvasGoal: "▲ 蜂巢入口目标线 ▲",
-    canvasSecured: "✔ 已抵达"
+    canvasSecured: "✔ 已抵达",
+    dirTitle: "视角/朝向:",
+    dirSouth: "S 正面",
+    dirNorth: "N 背面",
+    dirWest: "W 左侧",
+    dirEast: "E 右侧"
   },
   en: {
     brand: "ENTER THE HIVE",
@@ -302,7 +307,12 @@ const I18N = {
     btnRetry: "RETRY (R)",
     btnReplayFinal: "REPLAY SECTOR 5",
     canvasGoal: "▲ HIVE ENTRANCE BASELINE (GOAL) ▲",
-    canvasSecured: "✔ SECURED"
+    canvasSecured: "✔ SECURED",
+    dirTitle: "Facing:",
+    dirSouth: "S Front",
+    dirNorth: "N Back",
+    dirWest: "W Left",
+    dirEast: "E Right"
   }
 };
 
@@ -428,6 +438,14 @@ const LEVELS = [
  * Renders IDLE, WALK, and ATTACK sequences with dynamic cyber lighting, 
  * particle physics, volumetric shadows, wing articulation, and screen shake.
  */
+/**
+ * High-Definition Tactical Action Monitor for Hive Guard
+ * Features:
+ *  - 2.5D 4-Directional Sprites (Front S, Back N, Side E, Mirrored Side W)
+ *  - Skeletal/Multi-Joint Articulation (Wings fanning/flapping, claw arm slashing, spine breathing)
+ *  - Overhauled Forward Predator Attack (Crouch windup -> violent forward lunge -> front target burst)
+ *  - Camera / Facing sync with chessboard movements
+ */
 class ActionStageRenderer {
   constructor(canvasId, game) {
     this.canvas = document.getElementById(canvasId);
@@ -441,14 +459,26 @@ class ActionStageRenderer {
     this.attackPhase = 0;
     this.attackElapsed = 0;
     this.shake = { x: 0, y: 0, timer: 0, intensity: 0 };
+    this.facing = 'south'; // 'south' | 'north' | 'east' | 'west'
 
-    // High-resolution sprite
-    this.sprite = new Image();
-    this.sprite.src = 'assets/hive_guard_front.png';
-    this.spriteLoaded = false;
-    this.sprite.onload = () => {
-      this.spriteLoaded = true;
+    // Load 2.5D Directional & Articulation Sprites
+    this.sprites = {
+      front: new Image(),
+      back: new Image(),
+      side: new Image(),
+      arm: new Image()
     };
+    this.loaded = { front: false, back: false, side: false, arm: false };
+
+    this.sprites.front.onload = () => { this.loaded.front = true; };
+    this.sprites.back.onload = () => { this.loaded.back = true; };
+    this.sprites.side.onload = () => { this.loaded.side = true; };
+    this.sprites.arm.onload = () => { this.loaded.arm = true; };
+
+    this.sprites.front.src = 'assets/hive_guard_front.png';
+    this.sprites.back.src = 'assets/hive_guard_back.png';
+    this.sprites.side.src = 'assets/hive_guard_side.png';
+    this.sprites.arm.src = 'assets/hive_guard_arm.png';
 
     // Ambient floating particles
     this.ambientParticles = [];
@@ -484,6 +514,13 @@ class ActionStageRenderer {
     this.labelWalk = document.getElementById('label-anim-walk');
     this.labelAttack = document.getElementById('label-anim-attack');
 
+    // Direction Switcher DOM References
+    this.dirTitleText = document.getElementById('dir-title-text');
+    this.btnDirSouth = document.getElementById('btn-dir-south');
+    this.btnDirNorth = document.getElementById('btn-dir-north');
+    this.btnDirWest = document.getElementById('btn-dir-west');
+    this.btnDirEast = document.getElementById('btn-dir-east');
+
     this.setupListeners();
     this.updateHUD();
   }
@@ -506,6 +543,31 @@ class ActionStageRenderer {
         sfx.playAttack();
       });
     }
+
+    // Direction button events
+    const dirBtns = [
+      { el: this.btnDirSouth, dir: 'south' },
+      { el: this.btnDirNorth, dir: 'north' },
+      { el: this.btnDirWest, dir: 'west' },
+      { el: this.btnDirEast, dir: 'east' }
+    ];
+
+    dirBtns.forEach(({ el, dir }) => {
+      if (el) {
+        el.addEventListener('click', () => {
+          this.setFacing(dir, true);
+        });
+      }
+    });
+  }
+
+  setFacing(dir, syncToBoard = false) {
+    if (this.facing === dir) return;
+    this.facing = dir;
+    this.updateHUD();
+    if (syncToBoard && this.game && this.game.state && this.game.state.guard) {
+      this.game.state.guard.facing = dir;
+    }
   }
 
   setState(newState, duration = 0) {
@@ -518,12 +580,12 @@ class ActionStageRenderer {
   triggerWalk(duration = 1.3) {
     this.setState('walk', duration);
     this.speedlines = [];
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 22; i++) {
       this.speedlines.push({
         x: Math.random() * 340,
         y: 40 + Math.random() * 260,
-        len: 40 + Math.random() * 90,
-        speed: 9 + Math.random() * 15,
+        len: 40 + Math.random() * 100,
+        speed: 10 + Math.random() * 16,
         alpha: 0.3 + Math.random() * 0.6
       });
     }
@@ -558,16 +620,36 @@ class ActionStageRenderer {
     if (this.state === 'idle' && this.btnIdle) this.btnIdle.classList.add('active');
     if (this.state === 'walk' && this.btnWalk) this.btnWalk.classList.add('active');
     if (this.state === 'attack' && this.btnAttack) this.btnAttack.classList.add('active');
+
+    // Update direction buttons active state
+    const dirMap = {
+      south: this.btnDirSouth,
+      north: this.btnDirNorth,
+      west: this.btnDirWest,
+      east: this.btnDirEast
+    };
+    Object.values(dirMap).forEach(btn => {
+      if (btn) btn.classList.remove('active');
+    });
+    if (dirMap[this.facing]) {
+      dirMap[this.facing].classList.add('active');
+    }
   }
 
   updateLanguage(lang) {
     const isZh = (lang === 'zh');
+    const t = I18N[lang] || I18N.zh;
     if (this.monitorTitleText) {
       this.monitorTitleText.innerText = isZh ? '战术动作监视 · HIVE GUARD' : 'TACTICAL MONITOR · HIVE GUARD';
     }
     if (this.labelIdle) this.labelIdle.innerText = isZh ? '待机' : 'Idle';
     if (this.labelWalk) this.labelWalk.innerText = isZh ? '行走' : 'Walk';
     if (this.labelAttack) this.labelAttack.innerText = isZh ? '攻击' : 'Attack';
+    if (this.dirTitleText) this.dirTitleText.innerText = t.dirTitle || (isZh ? '视角/朝向:' : 'Facing:');
+    if (this.btnDirSouth) this.btnDirSouth.innerText = t.dirSouth || 'S 正面';
+    if (this.btnDirNorth) this.btnDirNorth.innerText = t.dirNorth || 'N 背面';
+    if (this.btnDirWest) this.btnDirWest.innerText = t.dirWest || 'W 左侧';
+    if (this.btnDirEast) this.btnDirEast.innerText = t.dirEast || 'E 右侧';
     this.updateHUD();
   }
 
@@ -626,52 +708,60 @@ class ActionStageRenderer {
       }
     }
 
-    // Attack state sequencing
+    // Overhauled Predator Attack State Sequencing
     if (this.state === 'attack') {
       this.attackElapsed = (this.stateDuration - this.stateTimer);
-      // Phase 1: Trigger slashes at 0.28s
-      if (this.attackElapsed >= 0.28 && this.attackPhase === 0) {
+
+      // Phase 1: Forward explosive slash projectiles erupt at 0.24s
+      if (this.attackElapsed >= 0.24 && this.attackPhase === 0) {
         this.attackPhase = 1;
+        // Upper downward crescent blade (cutting forward-down)
         this.slashArcs.push({
+          cx: 215,
+          cy: 145,
+          radius: 82,
           startAngle: -Math.PI * 0.75,
-          endAngle: Math.PI * 0.25,
-          radius: 88,
+          endAngle: Math.PI * 0.22,
           color: '#00f2fe',
           glow: '#4facfe',
           life: 1.0,
-          decay: 0.045,
-          cx: 170,
-          cy: 160
+          decay: 0.042
         });
+        // Lower rising crescent blade (crossing X-cut)
         this.slashArcs.push({
-          startAngle: Math.PI * 0.2,
-          endAngle: Math.PI * 1.15,
-          radius: 104,
+          cx: 225,
+          cy: 175,
+          radius: 96,
+          startAngle: Math.PI * 0.3,
+          endAngle: Math.PI * 1.25,
           color: '#ffb800',
           glow: '#ff8800',
           life: 1.0,
-          decay: 0.045,
-          cx: 170,
-          cy: 160
+          decay: 0.042
         });
       }
-      // Phase 2: Impact shockwave & particles at 0.45s
-      if (this.attackElapsed >= 0.45 && this.attackPhase === 1) {
+
+      // Phase 2: Forward Impact Burst & Laser Cleave at 0.44s
+      if (this.attackElapsed >= 0.44 && this.attackPhase === 1) {
         this.attackPhase = 2;
         this.shake.timer = 0.35;
-        this.shake.intensity = 15;
-        for (let k = 0; k < 36; k++) {
+        this.shake.intensity = 16;
+        
+        // Target explosion centered on front impact point (x=245, y=160)
+        const targetX = 245;
+        const targetY = 160;
+        for (let k = 0; k < 42; k++) {
           const angle = Math.random() * Math.PI * 2;
-          const spd = 3 + Math.random() * 8.5;
+          const spd = 3.5 + Math.random() * 9.5;
           this.fxParticles.push({
-            x: 170 + Math.cos(angle) * 15,
-            y: 160 + Math.sin(angle) * 15,
-            vx: Math.cos(angle) * spd,
+            x: targetX + (Math.random() - 0.5) * 20,
+            y: targetY + (Math.random() - 0.5) * 30,
+            vx: Math.cos(angle) * spd + 2.5, // Forward blast bias
             vy: Math.sin(angle) * spd,
             life: 1.0,
-            decay: 0.024 + Math.random() * 0.03,
-            size: 3 + Math.random() * 4,
-            color: Math.random() > 0.45 ? '#00f2fe' : (Math.random() > 0.5 ? '#ffb800' : '#ff3366')
+            decay: 0.022 + Math.random() * 0.028,
+            size: 3.5 + Math.random() * 4.5,
+            color: Math.random() > 0.4 ? '#00f2fe' : (Math.random() > 0.5 ? '#ffb800' : '#ff3366')
           });
         }
       }
@@ -686,11 +776,11 @@ class ActionStageRenderer {
           l.y = 40 + Math.random() * 260;
         }
       });
-      if (Math.random() < 0.6) {
+      if (Math.random() < 0.65) {
         this.fxParticles.push({
-          x: 170 - 25 + (Math.random() - 0.5) * 20,
+          x: 170 - 30 + (Math.random() - 0.5) * 20,
           y: 205 + (Math.random() - 0.5) * 20,
-          vx: -3.5 - Math.random() * 4.5,
+          vx: -4 - Math.random() * 4.5,
           vy: (Math.random() - 0.5) * 2.2,
           life: 1.0,
           decay: 0.055,
@@ -732,10 +822,10 @@ class ActionStageRenderer {
     // 4. 3D Floating Cyber Pedestal Dais
     this.drawPedestal(ctx, cx, cy + 96);
 
-    // 5. Render Character with Dynamic State Animations
+    // 5. Render Character with Directional Sprite & Multi-Joint Articulations
     this.drawCharacter(ctx, cx, cy);
 
-    // 6. Attack Slash Visual Effects & Shockwaves
+    // 6. Attack Slash Visual Effects & Forward Target Burst
     if (this.slashArcs.length > 0 || this.attackPhase >= 2) {
       this.drawAttackFX(ctx);
     }
@@ -747,7 +837,6 @@ class ActionStageRenderer {
   }
 
   drawCyberBackdrop(ctx, cx, cy) {
-    // Holographic concentric rings
     ctx.save();
     ctx.lineWidth = 1;
     [60, 110, 150].forEach((r, idx) => {
@@ -807,13 +896,13 @@ class ActionStageRenderer {
   drawPedestal(ctx, cx, cy) {
     ctx.save();
 
-    // 1. Lower drop shadow on floor
+    // Lower drop shadow
     ctx.beginPath();
     ctx.ellipse(cx, cy + 18, 95, 26, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
     ctx.fill();
 
-    // 2. Base platform slab (3D thickness)
+    // Base platform slab (3D thickness)
     ctx.beginPath();
     ctx.ellipse(cx, cy + 10, 85, 22, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(10, 18, 32, 0.95)';
@@ -822,7 +911,7 @@ class ActionStageRenderer {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // 3. Glowing upper dais
+    // Glowing upper dais
     ctx.beginPath();
     ctx.ellipse(cx, cy + 4, 78, 20, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0, 242, 254, 0.12)';
@@ -833,7 +922,7 @@ class ActionStageRenderer {
     ctx.shadowBlur = 12;
     ctx.stroke();
 
-    // 4. Rotating inner holographic energy ring
+    // Rotating inner holographic ring
     ctx.save();
     ctx.translate(cx, cy + 4);
     ctx.scale(1, 0.26);
@@ -850,7 +939,25 @@ class ActionStageRenderer {
   }
 
   drawCharacter(ctx, cx, cy) {
-    if (!this.spriteLoaded || !this.sprite) return;
+    // Select active directional sprite
+    let curSprite = null;
+    let isFlipped = false;
+
+    if (this.facing === 'south') {
+      curSprite = this.sprites.front;
+    } else if (this.facing === 'north') {
+      curSprite = this.sprites.back;
+    } else if (this.facing === 'east') {
+      curSprite = this.sprites.side;
+    } else if (this.facing === 'west') {
+      curSprite = this.sprites.side;
+      isFlipped = true;
+    }
+
+    if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) {
+      curSprite = this.sprites.front;
+      if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) return;
+    }
 
     ctx.save();
 
@@ -859,56 +966,76 @@ class ActionStageRenderer {
     let tilt = 0;
     let scaleX = 1;
     let scaleY = 1;
+    let wingFanAngle = 0;
+    let wingFlare = 1.0;
+    let armRotation = 0;
+    let drawArticulatedArm = false;
 
-    // Calculate motion variables by state
+    // 1. Kinetic Calculations by State
     if (this.state === 'idle') {
-      hoverY = Math.sin(this.animTime * 2.6) * 9;
-      scaleX = 1 + Math.sin(this.animTime * 2.6) * 0.025;
-      scaleY = 1 - Math.sin(this.animTime * 2.6) * 0.015;
+      hoverY = Math.sin(this.animTime * 2.5) * 8;
+      tilt = Math.sin(this.animTime * 1.5) * 0.02; // Gentle spine sway
+      scaleX = 1 + Math.sin(this.animTime * 2.5) * 0.02;
+      scaleY = 1 - Math.sin(this.animTime * 2.5) * 0.015;
+      wingFanAngle = Math.sin(this.animTime * 3.2) * 0.09; // Calm breathing wing fanning
+      armRotation = Math.sin(this.animTime * 2.5) * 0.05;
     } else if (this.state === 'walk') {
       hoverY = Math.sin(this.animTime * 8) * 7;
       surgeX = Math.sin(this.animTime * 8) * 8 + 14;
-      tilt = 0.18; // ~10.3 degrees forward tilt
-      scaleX = 0.97;
+      tilt = 0.16; // Forward aerodynamic tilt
+      scaleX = 0.98;
+      wingFanAngle = Math.sin(this.animTime * 16) * 0.25; // Rapid hovering flutter
+      wingFlare = 1.15;
+      armRotation = 0.15 + Math.sin(this.animTime * 8) * 0.1;
     } else if (this.state === 'attack') {
-      if (this.attackElapsed < 0.28) {
-        // Charging phase: pull back and expand wings
-        const p = this.attackElapsed / 0.28;
-        surgeX = -18 * p;
-        hoverY = -14 * p;
-        tilt = -0.12 * p;
-        scaleX = 1 + 0.16 * p;
-        scaleY = 1 + 0.08 * p;
-      } else if (this.attackElapsed < 0.55) {
-        // Strike phase: violent forward thrust
-        const p = (this.attackElapsed - 0.28) / 0.27;
-        surgeX = -18 + 58 * p;
-        hoverY = -14 + 18 * p;
-        tilt = -0.12 + 0.36 * p;
-        scaleX = 1.16 - 0.12 * p;
+      drawArticulatedArm = true;
+      if (this.attackElapsed < 0.24) {
+        // Phase 0: Forward Predator Crouch (coiling for attack, NO backward hit-stun!)
+        const p = this.attackElapsed / 0.24;
+        surgeX = -8 * p;
+        hoverY = 6 * p;
+        tilt = 0.22 * p; // Aggressive forward crouch
+        scaleX = 1 + 0.12 * p;
+        scaleY = 1 - 0.06 * p;
+        wingFanAngle = -0.35 * p; // Wings drawn back like coiled blades
+        wingFlare = 1 + 0.35 * p;
+        armRotation = -0.75 * p; // Claw pulled back ready to strike
+      } else if (this.attackElapsed < 0.48) {
+        // Phase 1: Violent Forward Lunge & Cleave (explosive forward strike!)
+        const p = (this.attackElapsed - 0.24) / 0.24;
+        surgeX = -8 + 88 * p; // Dashing +80px forward!
+        hoverY = 6 - 2 * p;
+        tilt = 0.22 + 0.16 * p;
+        scaleX = 1.12 - 0.08 * p;
+        wingFanAngle = -0.35 + 0.65 * p; // Wings snap forward as thrust stabilizers
+        wingFlare = 1.35;
+        armRotation = -0.75 + 1.85 * p; // Cleaving downward slash stroke
       } else {
-        // Recovery phase: return smoothly to neutral
-        const p = Math.min(1, (this.attackElapsed - 0.55) / 1.05);
+        // Phase 2 & 3: Dominant Execution Stance & Smooth Glide Return
+        const p = Math.min(1, (this.attackElapsed - 0.48) / 1.12);
         const ease = 1 - Math.pow(1 - p, 3);
-        surgeX = 40 * (1 - ease);
+        surgeX = 80 * (1 - ease);
         hoverY = 4 * (1 - ease);
-        tilt = 0.24 * (1 - ease);
+        tilt = 0.38 * (1 - ease);
         scaleX = 1.04 - 0.04 * ease;
+        wingFanAngle = 0.3 * (1 - ease) + Math.sin(this.animTime * 4) * 0.08 * ease;
+        wingFlare = 1.2 - 0.2 * ease;
+        armRotation = 1.1 * (1 - ease);
       }
     }
 
-    // Dynamic ground contact shadow scaling with height
+    // Dynamic ground contact shadow
     const shadowScale = Math.max(0.5, 1 - (hoverY / 35));
     ctx.beginPath();
-    ctx.ellipse(cx + surgeX * 0.4, cy + 96, 55 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + surgeX * 0.4, cy + 96, 56 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fill();
 
     // Radial Backlight Aura
-    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY, 15, cx + surgeX, cy - 20 + hoverY, 120);
+    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY, 15, cx + surgeX, cy - 20 + hoverY, 125);
     if (this.state === 'attack') {
-      auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.45)');
-      auraGrad.addColorStop(0.5, 'rgba(0, 242, 254, 0.25)');
+      auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.5)');
+      auraGrad.addColorStop(0.5, 'rgba(255, 184, 0, 0.25)');
     } else {
       auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.35)');
       auraGrad.addColorStop(0.5, 'rgba(79, 172, 254, 0.15)');
@@ -916,52 +1043,53 @@ class ActionStageRenderer {
     auraGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = auraGrad;
     ctx.beginPath();
-    ctx.arc(cx + surgeX, cy - 20 + hoverY, 120, 0, Math.PI * 2);
+    ctx.arc(cx + surgeX, cy - 20 + hoverY, 125, 0, Math.PI * 2);
     ctx.fill();
 
-    const charW = 186;
-    const charH = (charW / this.sprite.naturalWidth) * this.sprite.naturalHeight;
+    // Base height normalization
+    const baseH = 220;
+    const charH = baseH * scaleY;
+    const charW = (charH / curSprite.naturalHeight) * curSprite.naturalWidth * scaleX;
 
     // Ghosting motion trails for Walk
     if (this.state === 'walk') {
       [18, 36].forEach((offset, idx) => {
         ctx.save();
-        ctx.globalAlpha = 0.25 - idx * 0.12;
+        ctx.globalAlpha = 0.24 - idx * 0.11;
         ctx.translate(cx + surgeX - offset, cy + hoverY);
         ctx.rotate(tilt);
-        ctx.drawImage(this.sprite, -charW / 2, -charH / 2 - 10, charW, charH);
+        if (isFlipped) ctx.scale(-1, 1);
+        ctx.drawImage(curSprite, -charW / 2, -charH / 2 - 10, charW, charH);
         ctx.restore();
       });
     }
 
-    // Main Character Rendering
+    // Joint Articulation 1: Ethereal Wing Fanning Layer (behind character)
+    this.drawArticulatedWings(ctx, cx + surgeX, cy + hoverY - 24, charW, charH, wingFanAngle, wingFlare, this.facing);
+
+    // Main Character Base Sprite
     ctx.save();
     ctx.translate(cx + surgeX, cy + hoverY);
     ctx.rotate(tilt);
-    ctx.scale(scaleX, scaleY);
-    ctx.drawImage(this.sprite, -charW / 2, -charH / 2 - 10, charW, charH);
+    if (isFlipped) {
+      ctx.scale(-1, 1);
+    }
 
-    // Glowing cyan eye dots on the character mask
-    ctx.beginPath();
-    ctx.arc(-5, -charH / 2 + 38, 2, 0, Math.PI * 2);
-    ctx.arc(6, -charH / 2 + 38, 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#00f2fe';
-    ctx.shadowColor = '#00f2fe';
-    ctx.shadowBlur = 8;
-    ctx.fill();
+    // Dynamic Skirt/Tail wave physics
+    const skirtWave = Math.sin(this.animTime * 3) * 3;
+    ctx.drawImage(curSprite, -charW / 2 + skirtWave * 0.2, -charH / 2 - 10, charW, charH);
 
-    // Glowing chest cavity core
-    const corePulse = 0.5 + Math.sin(this.animTime * 4) * 0.4;
-    ctx.beginPath();
-    ctx.arc(0, -charH / 2 + 82, 5, 0, Math.PI * 2);
-    ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
-    ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
-    ctx.shadowBlur = 12 * corePulse;
-    ctx.fill();
+    // Joint Articulation 2: Dynamic Glowing Eyes / Visor / Core based on Facing
+    this.drawOperativeGlows(ctx, charW, charH, this.facing);
+
+    // Joint Articulation 3: Articulated Arm Overlay (Especially active during Predator Attack)
+    if (drawArticulatedArm && this.sprites.arm && this.sprites.arm.complete && this.sprites.arm.naturalWidth > 0) {
+      this.drawArticulatedArm(ctx, charW, charH, armRotation);
+    }
 
     ctx.restore();
 
-    // Scanning laser beam across character in Idle
+    // Idle tactical laser scanline
     if (this.state === 'idle') {
       const scanY = cy - 80 + Math.sin(this.animTime * 2.2) * 90;
       ctx.save();
@@ -979,6 +1107,140 @@ class ActionStageRenderer {
     ctx.restore();
   }
 
+  // Articulated Bio-Cyber Wings (flapping and fanning at shoulder joint roots)
+  drawArticulatedWings(ctx, wx, wy, charW, charH, wingAngle, flare, facing) {
+    ctx.save();
+    ctx.translate(wx, wy);
+
+    const isBack = (facing === 'north');
+    const wingSpan = (charW * 0.9 + 40) * flare;
+    const wingH = charH * 0.42 * flare;
+
+    // Wing glow colors
+    const wingColor = this.state === 'attack' ? 'rgba(255, 51, 102, 0.45)' : 'rgba(0, 242, 254, 0.35)';
+    const wingEdge = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+
+    // Left Wing
+    ctx.save();
+    ctx.translate(-charW * 0.22, 0);
+    ctx.rotate(-0.25 - wingAngle);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-wingSpan * 0.6, -wingH * 0.8, -wingSpan, -wingH * 0.3, -wingSpan, 0);
+    ctx.bezierCurveTo(-wingSpan * 0.7, wingH * 0.5, -wingSpan * 0.3, wingH * 0.3, 0, 0);
+    ctx.fillStyle = wingColor;
+    ctx.shadowColor = wingEdge;
+    ctx.shadowBlur = isBack ? 14 : 8;
+    ctx.fill();
+    ctx.strokeStyle = wingEdge;
+    ctx.lineWidth = isBack ? 2 : 1.2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Right Wing
+    ctx.save();
+    ctx.translate(charW * 0.22, 0);
+    ctx.rotate(0.25 + wingAngle);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(wingSpan * 0.6, -wingH * 0.8, wingSpan, -wingH * 0.3, wingSpan, 0);
+    ctx.bezierCurveTo(wingSpan * 0.7, wingH * 0.5, wingSpan * 0.3, wingH * 0.3, 0, 0);
+    ctx.fillStyle = wingColor;
+    ctx.shadowColor = wingEdge;
+    ctx.shadowBlur = isBack ? 14 : 8;
+    ctx.fill();
+    ctx.strokeStyle = wingEdge;
+    ctx.lineWidth = isBack ? 2 : 1.2;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // Dynamic Visor & Energy Cores depending on Facing Angle
+  drawOperativeGlows(ctx, charW, charH, facing) {
+    if (facing === 'south') {
+      // Front: Dual cyan optics & chest energy core
+      ctx.beginPath();
+      ctx.arc(-5, -charH / 2 + 38, 2.2, 0, Math.PI * 2);
+      ctx.arc(6, -charH / 2 + 38, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+
+      // Chest cavity core
+      const corePulse = 0.6 + Math.sin(this.animTime * 4) * 0.4;
+      ctx.beginPath();
+      ctx.arc(0, -charH / 2 + 82, 5, 0, Math.PI * 2);
+      ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+      ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+      ctx.shadowBlur = 12 * corePulse;
+      ctx.fill();
+    } else if (facing === 'north') {
+      // Back: Glowing spinal power conduit & twin shoulder exhaust nodes
+      ctx.beginPath();
+      ctx.arc(-14, -charH / 2 + 56, 3, 0, Math.PI * 2);
+      ctx.arc(14, -charH / 2 + 56, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffb800';
+      ctx.shadowColor = '#ffb800';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+
+      // Spinal line
+      ctx.beginPath();
+      ctx.moveTo(0, -charH / 2 + 52);
+      ctx.lineTo(0, -charH / 2 + 105);
+      ctx.strokeStyle = '#00f2fe';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+    } else {
+      // Side (East or West): Monocular Visor & side shoulder exhaust
+      ctx.beginPath();
+      ctx.arc(6, -charH / 2 + 38, 2.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(2, -charH / 2 + 80, 4, 0, Math.PI * 2);
+      ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#ffb800';
+      ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#ffb800';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+    }
+  }
+
+  // Articulated Claw Arm with Forearm Pivot & Claw Strike
+  drawArticulatedArm(ctx, charW, charH, rotation) {
+    ctx.save();
+    // Shoulder anchor socket
+    const shoulderX = 14;
+    const shoulderY = -charH / 2 + 68;
+
+    ctx.translate(shoulderX, shoulderY);
+    ctx.rotate(rotation);
+
+    const armH = charH * 0.48;
+    const armW = (armH / this.sprites.arm.naturalHeight) * this.sprites.arm.naturalWidth;
+
+    ctx.drawImage(this.sprites.arm, -armW * 0.5, -6, armW, armH);
+
+    // Glowing tip at claw ends
+    const clawTipY = armH - 12;
+    ctx.beginPath();
+    ctx.arc(0, clawTipY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff3366';
+    ctx.shadowColor = '#ff3366';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   drawAttackFX(ctx) {
     ctx.save();
 
@@ -986,39 +1248,55 @@ class ActionStageRenderer {
     this.slashArcs.forEach(s => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, s.life);
-      ctx.lineWidth = 7 * s.life;
+      ctx.lineWidth = 8 * s.life;
       ctx.strokeStyle = s.color;
       ctx.shadowColor = s.glow;
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 20;
 
       ctx.beginPath();
-      ctx.arc(s.cx + 20, s.cy, s.radius, s.startAngle, s.endAngle);
+      ctx.arc(s.cx, s.cy, s.radius, s.startAngle, s.endAngle);
       ctx.stroke();
 
       // Sharp blade flare cap
-      const capX = (s.cx + 20) + Math.cos(s.endAngle) * s.radius;
+      const capX = s.cx + Math.cos(s.endAngle) * s.radius;
       const capY = s.cy + Math.sin(s.endAngle) * s.radius;
       ctx.beginPath();
-      ctx.arc(capX, capY, 8 * s.life, 0, Math.PI * 2);
+      ctx.arc(capX, capY, 9 * s.life, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = 22;
       ctx.fill();
       ctx.restore();
     });
 
-    // 2. Expanding shockwave ring at impact
+    // 2. Expanding Target Shockwave Ring ahead of the Hive Guard
     if (this.attackPhase >= 2 && this.attackElapsed < 0.85) {
-      const p = (this.attackElapsed - 0.45) / 0.4;
-      const ringRadius = 20 + p * 110;
+      const p = (this.attackElapsed - 0.44) / 0.41;
+      const ringRadius = 15 + p * 125;
+      const targetX = 245;
+      const targetY = 160;
+
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - p);
       ctx.strokeStyle = '#00f2fe';
-      ctx.lineWidth = 3.5 * (1 - p);
+      ctx.lineWidth = 4 * (1 - p);
       ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
       ctx.beginPath();
-      ctx.arc(190, 160, ringRadius, 0, Math.PI * 2);
+      ctx.arc(targetX, targetY, ringRadius, 0, Math.PI * 2);
       ctx.stroke();
+
+      // Cross energy cleave flare on target
+      ctx.beginPath();
+      ctx.moveTo(targetX - 35 * (1 - p), targetY - 45 * (1 - p));
+      ctx.lineTo(targetX + 35 * (1 - p), targetY + 45 * (1 - p));
+      ctx.moveTo(targetX + 35 * (1 - p), targetY - 45 * (1 - p));
+      ctx.lineTo(targetX - 35 * (1 - p), targetY + 45 * (1 - p));
+      ctx.strokeStyle = '#ff3366';
+      ctx.lineWidth = 3.5 * (1 - p);
+      ctx.shadowColor = '#ff3366';
+      ctx.shadowBlur = 14;
+      ctx.stroke();
+
       ctx.restore();
     }
 
@@ -1055,9 +1333,15 @@ class Game {
     this.particles = [];
     this.animTime = 0;
 
-    // Load Hive Guard transparent sprite for chessboard & side monitor
-    this.hiveGuardSprite = new Image();
-    this.hiveGuardSprite.src = 'assets/hive_guard_front.png';
+    // Load Hive Guard 2.5D Directional Sprites for Chessboard Figurine
+    this.guardSprites = {
+      front: new Image(),
+      back: new Image(),
+      side: new Image()
+    };
+    this.guardSprites.front.src = 'assets/hive_guard_front.png';
+    this.guardSprites.back.src = 'assets/hive_guard_back.png';
+    this.guardSprites.side.src = 'assets/hive_guard_side.png';
 
     // Initialize side tactical action showcase monitor
     this.actionStage = new ActionStageRenderer('charActionCanvas', this);
@@ -1206,6 +1490,7 @@ class Game {
       guard: { 
         x: lvl.guardStart.x, 
         y: lvl.guardStart.y, 
+        facing: 'north',
         steps: this.maxSteps,
         atGoal: false,
         history: [{ x: lvl.guardStart.x, y: lvl.guardStart.y }]
@@ -1217,6 +1502,10 @@ class Game {
       isWon: false,
       isLost: false
     };
+
+    if (this.actionStage) {
+      this.actionStage.setFacing('north');
+    }
 
     this.updateLevelTitle();
     this.updateHUD();
@@ -1546,6 +1835,18 @@ class Game {
       if (otherChar.x === tx && otherChar.y === ty) {
         this.switchRole(otherRole);
         return;
+      }
+
+      // Update operative facing direction based on movement vector
+      const moveDx = tx - char.x;
+      const moveDy = ty - char.y;
+      if (Math.abs(moveDx) > Math.abs(moveDy)) {
+        char.facing = moveDx > 0 ? 'east' : 'west';
+      } else if (moveDy !== 0) {
+        char.facing = moveDy > 0 ? 'north' : 'south';
+      }
+      if (this.activeRole === 'guard' && this.actionStage) {
+        this.actionStage.setFacing(char.facing);
       }
 
       const isBacktrack = char.history && char.history.length >= 2 && 
@@ -2449,11 +2750,29 @@ class Game {
       ctx.restore();
     }
 
-    if (role === 'guard' && this.hiveGuardSprite && this.hiveGuardSprite.complete && this.hiveGuardSprite.naturalWidth > 0) {
+    // Determine directional sprite for Hive Guard
+    const facing = char.facing || 'north';
+    let guardImg = this.guardSprites ? this.guardSprites.front : null;
+    let flipX = false;
+
+    if (this.guardSprites) {
+      if (facing === 'north') {
+        guardImg = this.guardSprites.back;
+      } else if (facing === 'south') {
+        guardImg = this.guardSprites.front;
+      } else if (facing === 'east') {
+        guardImg = this.guardSprites.side;
+      } else if (facing === 'west') {
+        guardImg = this.guardSprites.side;
+        flipX = true;
+      }
+    }
+
+    if (role === 'guard' && guardImg && guardImg.complete && guardImg.naturalWidth > 0) {
       // Substantially enlarged 3D Hive Guard Figurine on Isometric Board
-      const baseW = 76; // Significantly increased size
-      const spriteW = baseW * rowScale;
-      const spriteH = (spriteW / this.hiveGuardSprite.naturalWidth) * this.hiveGuardSprite.naturalHeight;
+      const baseH = 116; // Standardized height
+      const spriteH = baseH * rowScale;
+      const spriteW = (spriteH / guardImg.naturalHeight) * guardImg.naturalWidth;
       const spriteX = x - spriteW / 2;
       const spriteY = py - spriteH + 18;
 
@@ -2474,26 +2793,65 @@ class Game {
       ctx.scale(breathScale, 1);
       ctx.translate(-x, -(py - 32));
 
-      ctx.drawImage(this.hiveGuardSprite, spriteX, spriteY, spriteW, spriteH);
+      // Draw directional sprite with horizontal mirroring if facing west
+      if (flipX) {
+        ctx.save();
+        ctx.translate(x, 0);
+        ctx.scale(-1, 1);
+        ctx.translate(-x, 0);
+        ctx.drawImage(guardImg, spriteX, spriteY, spriteW, spriteH);
+        ctx.restore();
+      } else {
+        ctx.drawImage(guardImg, spriteX, spriteY, spriteW, spriteH);
+      }
       ctx.restore();
 
-      // Glowing cyan eye dots on sprite
-      const eyeY = spriteY + spriteH * 0.18;
-      ctx.beginPath();
-      ctx.arc(x - 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
-      ctx.arc(x + 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
-      ctx.fillStyle = '#00f2fe';
-      ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 6;
-      ctx.fill();
+      // Glowing directional indicators on figurine
+      if (facing === 'south') {
+        const eyeY = spriteY + spriteH * 0.18;
+        ctx.beginPath();
+        ctx.arc(x - 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
+        ctx.arc(x + 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
+        ctx.fillStyle = '#00f2fe';
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 6;
+        ctx.fill();
 
-      // Glowing chest core
-      ctx.beginPath();
-      ctx.arc(x, spriteY + spriteH * 0.32, 2.5 * rowScale, 0, Math.PI * 2);
-      ctx.fillStyle = '#00f2fe';
-      ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 8;
-      ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, spriteY + spriteH * 0.32, 2.5 * rowScale, 0, Math.PI * 2);
+        ctx.fillStyle = '#00f2fe';
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+      } else if (facing === 'north') {
+        const nodeY = spriteY + spriteH * 0.22;
+        ctx.beginPath();
+        ctx.arc(x - 6 * rowScale, nodeY, 2, 0, Math.PI * 2);
+        ctx.arc(x + 6 * rowScale, nodeY, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffb800';
+        ctx.shadowColor = '#ffb800';
+        ctx.shadowBlur = 6;
+        ctx.fill();
+
+        // Spine glow
+        ctx.beginPath();
+        ctx.moveTo(x, spriteY + spriteH * 0.22);
+        ctx.lineTo(x, spriteY + spriteH * 0.45);
+        ctx.strokeStyle = '#00f2fe';
+        ctx.lineWidth = 1.8;
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+      } else {
+        const visorX = x + (flipX ? -4 : 4) * rowScale;
+        const visorY = spriteY + spriteH * 0.18;
+        ctx.beginPath();
+        ctx.arc(visorX, visorY, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#00f2fe';
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 6;
+        ctx.fill();
+      }
 
       // Holographic Step Count Floating Badge
       ctx.beginPath();
