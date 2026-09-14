@@ -564,6 +564,9 @@ class ActionStageRenderer {
   setFacing(dir, syncToBoard = false) {
     if (this.facing === dir) return;
     this.facing = dir;
+    if (this.state === 'walk') {
+      this.initSpeedlines();
+    }
     this.updateHUD();
     if (syncToBoard && this.game && this.game.state && this.game.state.guard) {
       this.game.state.guard.facing = dir;
@@ -579,11 +582,16 @@ class ActionStageRenderer {
 
   triggerWalk(duration = 1.3) {
     this.setState('walk', duration);
+    this.initSpeedlines();
+  }
+
+  initSpeedlines() {
     this.speedlines = [];
+    const isHoriz = (this.facing === 'east' || this.facing === 'west');
     for (let i = 0; i < 22; i++) {
       this.speedlines.push({
         x: Math.random() * 340,
-        y: 40 + Math.random() * 260,
+        y: Math.random() * 340,
         len: 40 + Math.random() * 100,
         speed: 10 + Math.random() * 16,
         alpha: 0.3 + Math.random() * 0.6
@@ -708,37 +716,60 @@ class ActionStageRenderer {
       }
     }
 
-    // Overhauled Predator Attack State Sequencing
+    // Overhauled 4-Directional Predator Attack State Sequencing
     if (this.state === 'attack') {
       this.attackElapsed = (this.stateDuration - this.stateTimer);
 
       // Phase 1: Forward explosive slash projectiles erupt at 0.24s
       if (this.attackElapsed >= 0.24 && this.attackPhase === 0) {
         this.attackPhase = 1;
-        // Upper downward crescent blade (cutting forward-down)
-        this.slashArcs.push({
-          cx: 215,
-          cy: 145,
-          radius: 82,
-          startAngle: -Math.PI * 0.75,
-          endAngle: Math.PI * 0.22,
-          color: '#00f2fe',
-          glow: '#4facfe',
-          life: 1.0,
-          decay: 0.042
-        });
-        // Lower rising crescent blade (crossing X-cut)
-        this.slashArcs.push({
-          cx: 225,
-          cy: 175,
-          radius: 96,
-          startAngle: Math.PI * 0.3,
-          endAngle: Math.PI * 1.25,
-          color: '#ffb800',
-          glow: '#ff8800',
-          life: 1.0,
-          decay: 0.042
-        });
+        if (this.facing === 'east') {
+          this.slashArcs.push({
+            cx: 215, cy: 145, radius: 82,
+            startAngle: -Math.PI * 0.75, endAngle: Math.PI * 0.22,
+            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
+          });
+          this.slashArcs.push({
+            cx: 225, cy: 175, radius: 96,
+            startAngle: Math.PI * 0.3, endAngle: Math.PI * 1.25,
+            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
+          });
+        } else if (this.facing === 'west') {
+          this.slashArcs.push({
+            cx: 125, cy: 145, radius: 82,
+            startAngle: -Math.PI * 0.25, endAngle: Math.PI * 0.75,
+            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
+          });
+          this.slashArcs.push({
+            cx: 115, cy: 175, radius: 96,
+            startAngle: Math.PI * 0.7, endAngle: -Math.PI * 0.25,
+            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
+          });
+        } else if (this.facing === 'north') {
+          // Lunging forward into the screen / north: upward crescent blades
+          this.slashArcs.push({
+            cx: 145, cy: 115, radius: 84,
+            startAngle: -Math.PI * 0.95, endAngle: -Math.PI * 0.05,
+            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
+          });
+          this.slashArcs.push({
+            cx: 195, cy: 115, radius: 92,
+            startAngle: -Math.PI * 0.9, endAngle: -Math.PI * 0.1,
+            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
+          });
+        } else if (this.facing === 'south') {
+          // Lunging towards camera / south: downward crescent blades
+          this.slashArcs.push({
+            cx: 145, cy: 225, radius: 84,
+            startAngle: Math.PI * 0.05, endAngle: Math.PI * 0.95,
+            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
+          });
+          this.slashArcs.push({
+            cx: 195, cy: 225, radius: 92,
+            startAngle: Math.PI * 0.1, endAngle: Math.PI * 0.9,
+            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
+          });
+        }
       }
 
       // Phase 2: Forward Impact Burst & Laser Cleave at 0.44s
@@ -747,17 +778,24 @@ class ActionStageRenderer {
         this.shake.timer = 0.35;
         this.shake.intensity = 16;
         
-        // Target explosion centered on front impact point (x=245, y=160)
-        const targetX = 245;
-        const targetY = 160;
+        let targetX = 245, targetY = 160;
+        let blastDx = 3.0, blastDy = 0;
+        if (this.facing === 'west') {
+          targetX = 95; targetY = 160; blastDx = -3.0; blastDy = 0;
+        } else if (this.facing === 'north') {
+          targetX = 170; targetY = 85; blastDx = 0; blastDy = -3.5;
+        } else if (this.facing === 'south') {
+          targetX = 170; targetY = 245; blastDx = 0; blastDy = 3.5;
+        }
+
         for (let k = 0; k < 42; k++) {
           const angle = Math.random() * Math.PI * 2;
           const spd = 3.5 + Math.random() * 9.5;
           this.fxParticles.push({
             x: targetX + (Math.random() - 0.5) * 20,
-            y: targetY + (Math.random() - 0.5) * 30,
-            vx: Math.cos(angle) * spd + 2.5, // Forward blast bias
-            vy: Math.sin(angle) * spd,
+            y: targetY + (Math.random() - 0.5) * 20,
+            vx: Math.cos(angle) * spd + blastDx,
+            vy: Math.sin(angle) * spd + blastDy,
             life: 1.0,
             decay: 0.022 + Math.random() * 0.028,
             size: 3.5 + Math.random() * 4.5,
@@ -767,21 +805,36 @@ class ActionStageRenderer {
       }
     }
 
-    // Walk state speedlines
+    // 4-Directional Walk Speedlines
     if (this.state === 'walk') {
       this.speedlines.forEach(l => {
-        l.x -= l.speed;
-        if (l.x + l.len < 0) {
-          l.x = 340 + Math.random() * 30;
-          l.y = 40 + Math.random() * 260;
+        if (this.facing === 'east') {
+          l.x -= l.speed;
+          if (l.x + l.len < 0) { l.x = 340 + Math.random() * 30; l.y = Math.random() * 340; }
+        } else if (this.facing === 'west') {
+          l.x += l.speed;
+          if (l.x > 340) { l.x = -l.len - Math.random() * 30; l.y = Math.random() * 340; }
+        } else if (this.facing === 'north') {
+          l.y += l.speed;
+          if (l.y > 340) { l.y = -l.len - Math.random() * 30; l.x = Math.random() * 340; }
+        } else if (this.facing === 'south') {
+          l.y -= l.speed;
+          if (l.y + l.len < 0) { l.y = 340 + Math.random() * 30; l.x = Math.random() * 340; }
         }
       });
+
       if (Math.random() < 0.65) {
+        let spawnVx = 0, spawnVy = 0;
+        if (this.facing === 'east') spawnVx = -4 - Math.random() * 4;
+        else if (this.facing === 'west') spawnVx = 4 + Math.random() * 4;
+        else if (this.facing === 'north') spawnVy = 4 + Math.random() * 4;
+        else if (this.facing === 'south') spawnVy = -4 - Math.random() * 4;
+
         this.fxParticles.push({
-          x: 170 - 30 + (Math.random() - 0.5) * 20,
-          y: 205 + (Math.random() - 0.5) * 20,
-          vx: -4 - Math.random() * 4.5,
-          vy: (Math.random() - 0.5) * 2.2,
+          x: 170 + (Math.random() - 0.5) * 30,
+          y: 200 + (Math.random() - 0.5) * 30,
+          vx: spawnVx,
+          vy: spawnVy,
           life: 1.0,
           decay: 0.055,
           size: 2.5 + Math.random() * 2.5,
@@ -822,7 +875,7 @@ class ActionStageRenderer {
     // 4. 3D Floating Cyber Pedestal Dais
     this.drawPedestal(ctx, cx, cy + 96);
 
-    // 5. Render Character with Directional Sprite & Multi-Joint Articulations
+    // 5. Render Character with 4-Directional Sprites & Authentic Anatomy
     this.drawCharacter(ctx, cx, cy);
 
     // 6. Attack Slash Visual Effects & Forward Target Burst
@@ -879,6 +932,7 @@ class ActionStageRenderer {
 
   drawSpeedlines(ctx) {
     ctx.save();
+    const isHoriz = (this.facing === 'east' || this.facing === 'west');
     this.speedlines.forEach(l => {
       ctx.globalAlpha = l.alpha;
       ctx.strokeStyle = '#00f2fe';
@@ -886,8 +940,13 @@ class ActionStageRenderer {
       ctx.shadowColor = '#00f2fe';
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.moveTo(l.x, l.y);
-      ctx.lineTo(l.x + l.len, l.y);
+      if (isHoriz) {
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(l.x + l.len, l.y);
+      } else {
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(l.x, l.y + l.len);
+      }
       ctx.stroke();
     });
     ctx.restore();
@@ -963,63 +1022,102 @@ class ActionStageRenderer {
 
     let hoverY = 0;
     let surgeX = 0;
+    let surgeY = 0;
     let tilt = 0;
     let scaleX = 1;
     let scaleY = 1;
-    let wingFanAngle = 0;
-    let wingFlare = 1.0;
     let armRotation = 0;
     let drawArticulatedArm = false;
 
-    // 1. Kinetic Calculations by State
+    // 1. 4-Directional Kinetic Motion Calculations
     if (this.state === 'idle') {
       hoverY = Math.sin(this.animTime * 2.5) * 8;
-      tilt = Math.sin(this.animTime * 1.5) * 0.02; // Gentle spine sway
       scaleX = 1 + Math.sin(this.animTime * 2.5) * 0.02;
       scaleY = 1 - Math.sin(this.animTime * 2.5) * 0.015;
-      wingFanAngle = Math.sin(this.animTime * 3.2) * 0.09; // Calm breathing wing fanning
+      tilt = (this.facing === 'east' ? 1 : (this.facing === 'west' ? -1 : 0)) * Math.sin(this.animTime * 1.5) * 0.02;
       armRotation = Math.sin(this.animTime * 2.5) * 0.05;
     } else if (this.state === 'walk') {
-      hoverY = Math.sin(this.animTime * 8) * 7;
-      surgeX = Math.sin(this.animTime * 8) * 8 + 14;
-      tilt = 0.16; // Forward aerodynamic tilt
-      scaleX = 0.98;
-      wingFanAngle = Math.sin(this.animTime * 16) * 0.25; // Rapid hovering flutter
-      wingFlare = 1.15;
+      if (this.facing === 'east') {
+        hoverY = Math.sin(this.animTime * 8) * 6;
+        surgeX = Math.sin(this.animTime * 8) * 8 + 14;
+        tilt = 0.16;
+        scaleX = 0.98;
+      } else if (this.facing === 'west') {
+        hoverY = Math.sin(this.animTime * 8) * 6;
+        surgeX = -(Math.sin(this.animTime * 8) * 8 + 14);
+        tilt = -0.16;
+        scaleX = 0.98;
+      } else if (this.facing === 'north') {
+        surgeY = -(Math.sin(this.animTime * 8) * 8 + 16);
+        scaleX = 0.96;
+        scaleY = 1.02;
+      } else if (this.facing === 'south') {
+        surgeY = +(Math.sin(this.animTime * 8) * 8 + 16);
+        scaleX = 1.02;
+        scaleY = 0.98;
+      }
       armRotation = 0.15 + Math.sin(this.animTime * 8) * 0.1;
     } else if (this.state === 'attack') {
-      drawArticulatedArm = true;
+      drawArticulatedArm = (this.facing !== 'north'); // Back view already has arms in pose
       if (this.attackElapsed < 0.24) {
-        // Phase 0: Forward Predator Crouch (coiling for attack, NO backward hit-stun!)
+        // Phase 0: Forward Predator Crouch (coiling in the direction of attack)
         const p = this.attackElapsed / 0.24;
-        surgeX = -8 * p;
-        hoverY = 6 * p;
-        tilt = 0.22 * p; // Aggressive forward crouch
-        scaleX = 1 + 0.12 * p;
-        scaleY = 1 - 0.06 * p;
-        wingFanAngle = -0.35 * p; // Wings drawn back like coiled blades
-        wingFlare = 1 + 0.35 * p;
-        armRotation = -0.75 * p; // Claw pulled back ready to strike
+        if (this.facing === 'east') {
+          surgeX = -10 * p;
+          hoverY = 6 * p;
+          tilt = 0.22 * p;
+        } else if (this.facing === 'west') {
+          surgeX = 10 * p;
+          hoverY = 6 * p;
+          tilt = -0.22 * p;
+        } else if (this.facing === 'north') {
+          surgeY = 12 * p;
+          scaleX = 1.08;
+          scaleY = 0.92;
+        } else if (this.facing === 'south') {
+          surgeY = -12 * p;
+          scaleX = 0.92;
+          scaleY = 1.08;
+        }
+        armRotation = -0.75 * p;
       } else if (this.attackElapsed < 0.48) {
-        // Phase 1: Violent Forward Lunge & Cleave (explosive forward strike!)
+        // Phase 1: Violent Forward Lunge in facing direction
         const p = (this.attackElapsed - 0.24) / 0.24;
-        surgeX = -8 + 88 * p; // Dashing +80px forward!
-        hoverY = 6 - 2 * p;
-        tilt = 0.22 + 0.16 * p;
-        scaleX = 1.12 - 0.08 * p;
-        wingFanAngle = -0.35 + 0.65 * p; // Wings snap forward as thrust stabilizers
-        wingFlare = 1.35;
-        armRotation = -0.75 + 1.85 * p; // Cleaving downward slash stroke
+        if (this.facing === 'east') {
+          surgeX = -10 + 90 * p;
+          hoverY = 6 - 2 * p;
+          tilt = 0.22 + 0.16 * p;
+        } else if (this.facing === 'west') {
+          surgeX = 10 - 90 * p;
+          hoverY = 6 - 2 * p;
+          tilt = -0.22 - 0.16 * p;
+        } else if (this.facing === 'north') {
+          surgeY = 12 - 92 * p;
+          scaleX = 0.95;
+          scaleY = 1.08;
+        } else if (this.facing === 'south') {
+          surgeY = -12 + 92 * p;
+          scaleX = 1.08;
+          scaleY = 0.95;
+        }
+        armRotation = -0.75 + 1.85 * p;
       } else {
-        // Phase 2 & 3: Dominant Execution Stance & Smooth Glide Return
+        // Phase 2 & 3: Lethal Stance & Glide Return
         const p = Math.min(1, (this.attackElapsed - 0.48) / 1.12);
         const ease = 1 - Math.pow(1 - p, 3);
-        surgeX = 80 * (1 - ease);
-        hoverY = 4 * (1 - ease);
-        tilt = 0.38 * (1 - ease);
-        scaleX = 1.04 - 0.04 * ease;
-        wingFanAngle = 0.3 * (1 - ease) + Math.sin(this.animTime * 4) * 0.08 * ease;
-        wingFlare = 1.2 - 0.2 * ease;
+        if (this.facing === 'east') {
+          surgeX = 80 * (1 - ease);
+          hoverY = 4 * (1 - ease);
+          tilt = 0.38 * (1 - ease);
+        } else if (this.facing === 'west') {
+          surgeX = -80 * (1 - ease);
+          hoverY = 4 * (1 - ease);
+          tilt = -0.38 * (1 - ease);
+        } else if (this.facing === 'north') {
+          surgeY = -80 * (1 - ease);
+        } else if (this.facing === 'south') {
+          surgeY = 80 * (1 - ease);
+        }
         armRotation = 1.1 * (1 - ease);
       }
     }
@@ -1027,12 +1125,12 @@ class ActionStageRenderer {
     // Dynamic ground contact shadow
     const shadowScale = Math.max(0.5, 1 - (hoverY / 35));
     ctx.beginPath();
-    ctx.ellipse(cx + surgeX * 0.4, cy + 96, 56 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + surgeX * 0.4, cy + 96 + surgeY * 0.3, 56 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fill();
 
     // Radial Backlight Aura
-    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY, 15, cx + surgeX, cy - 20 + hoverY, 125);
+    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY + surgeY, 15, cx + surgeX, cy - 20 + hoverY + surgeY, 125);
     if (this.state === 'attack') {
       auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.5)');
       auraGrad.addColorStop(0.5, 'rgba(255, 184, 0, 0.25)');
@@ -1043,7 +1141,7 @@ class ActionStageRenderer {
     auraGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = auraGrad;
     ctx.beginPath();
-    ctx.arc(cx + surgeX, cy - 20 + hoverY, 125, 0, Math.PI * 2);
+    ctx.arc(cx + surgeX, cy - 20 + hoverY + surgeY, 125, 0, Math.PI * 2);
     ctx.fill();
 
     // Base height normalization
@@ -1056,7 +1154,14 @@ class ActionStageRenderer {
       [18, 36].forEach((offset, idx) => {
         ctx.save();
         ctx.globalAlpha = 0.24 - idx * 0.11;
-        ctx.translate(cx + surgeX - offset, cy + hoverY);
+        let trailX = cx + surgeX;
+        let trailY = cy + hoverY + surgeY;
+        if (this.facing === 'east') trailX -= offset;
+        else if (this.facing === 'west') trailX += offset;
+        else if (this.facing === 'north') trailY += offset;
+        else if (this.facing === 'south') trailY -= offset;
+
+        ctx.translate(trailX, trailY);
         ctx.rotate(tilt);
         if (isFlipped) ctx.scale(-1, 1);
         ctx.drawImage(curSprite, -charW / 2, -charH / 2 - 10, charW, charH);
@@ -1064,12 +1169,9 @@ class ActionStageRenderer {
       });
     }
 
-    // Joint Articulation 1: Ethereal Wing Fanning Layer (behind character)
-    this.drawArticulatedWings(ctx, cx + surgeX, cy + hoverY - 24, charW, charH, wingFanAngle, wingFlare, this.facing);
-
     // Main Character Base Sprite
     ctx.save();
-    ctx.translate(cx + surgeX, cy + hoverY);
+    ctx.translate(cx + surgeX, cy + hoverY + surgeY);
     ctx.rotate(tilt);
     if (isFlipped) {
       ctx.scale(-1, 1);
@@ -1079,10 +1181,10 @@ class ActionStageRenderer {
     const skirtWave = Math.sin(this.animTime * 3) * 3;
     ctx.drawImage(curSprite, -charW / 2 + skirtWave * 0.2, -charH / 2 - 10, charW, charH);
 
-    // Joint Articulation 2: Dynamic Glowing Eyes / Visor / Core based on Facing
+    // Glowing Eyes / Visor / Core based on Facing
     this.drawOperativeGlows(ctx, charW, charH, this.facing);
 
-    // Joint Articulation 3: Articulated Arm Overlay (Especially active during Predator Attack)
+    // Articulated Arm (for east, west, south)
     if (drawArticulatedArm && this.sprites.arm && this.sprites.arm.complete && this.sprites.arm.naturalWidth > 0) {
       this.drawArticulatedArm(ctx, charW, charH, armRotation);
     }
@@ -1103,56 +1205,6 @@ class ActionStageRenderer {
       ctx.stroke();
       ctx.restore();
     }
-
-    ctx.restore();
-  }
-
-  // Articulated Bio-Cyber Wings (flapping and fanning at shoulder joint roots)
-  drawArticulatedWings(ctx, wx, wy, charW, charH, wingAngle, flare, facing) {
-    ctx.save();
-    ctx.translate(wx, wy);
-
-    const isBack = (facing === 'north');
-    const wingSpan = (charW * 0.9 + 40) * flare;
-    const wingH = charH * 0.42 * flare;
-
-    // Wing glow colors
-    const wingColor = this.state === 'attack' ? 'rgba(255, 51, 102, 0.45)' : 'rgba(0, 242, 254, 0.35)';
-    const wingEdge = this.state === 'attack' ? '#ff3366' : '#00f2fe';
-
-    // Left Wing
-    ctx.save();
-    ctx.translate(-charW * 0.22, 0);
-    ctx.rotate(-0.25 - wingAngle);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.bezierCurveTo(-wingSpan * 0.6, -wingH * 0.8, -wingSpan, -wingH * 0.3, -wingSpan, 0);
-    ctx.bezierCurveTo(-wingSpan * 0.7, wingH * 0.5, -wingSpan * 0.3, wingH * 0.3, 0, 0);
-    ctx.fillStyle = wingColor;
-    ctx.shadowColor = wingEdge;
-    ctx.shadowBlur = isBack ? 14 : 8;
-    ctx.fill();
-    ctx.strokeStyle = wingEdge;
-    ctx.lineWidth = isBack ? 2 : 1.2;
-    ctx.stroke();
-    ctx.restore();
-
-    // Right Wing
-    ctx.save();
-    ctx.translate(charW * 0.22, 0);
-    ctx.rotate(0.25 + wingAngle);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.bezierCurveTo(wingSpan * 0.6, -wingH * 0.8, wingSpan, -wingH * 0.3, wingSpan, 0);
-    ctx.bezierCurveTo(wingSpan * 0.7, wingH * 0.5, wingSpan * 0.3, wingH * 0.3, 0, 0);
-    ctx.fillStyle = wingColor;
-    ctx.shadowColor = wingEdge;
-    ctx.shadowBlur = isBack ? 14 : 8;
-    ctx.fill();
-    ctx.strokeStyle = wingEdge;
-    ctx.lineWidth = isBack ? 2 : 1.2;
-    ctx.stroke();
-    ctx.restore();
 
     ctx.restore();
   }
@@ -1272,8 +1324,15 @@ class ActionStageRenderer {
     if (this.attackPhase >= 2 && this.attackElapsed < 0.85) {
       const p = (this.attackElapsed - 0.44) / 0.41;
       const ringRadius = 15 + p * 125;
-      const targetX = 245;
-      const targetY = 160;
+      
+      let targetX = 245, targetY = 160;
+      if (this.facing === 'west') {
+        targetX = 95; targetY = 160;
+      } else if (this.facing === 'north') {
+        targetX = 170; targetY = 85;
+      } else if (this.facing === 'south') {
+        targetX = 170; targetY = 245;
+      }
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - p);
