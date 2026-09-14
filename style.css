@@ -644,56 +644,6 @@ body {
   box-shadow: 0 0 14px rgba(255, 51, 102, 0.5);
 }
 
-/* 4-Direction View Switcher Bar */
-.camera-dir-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(4, 9, 18, 0.7);
-  border: 1px solid rgba(0, 242, 254, 0.15);
-  border-radius: 6px;
-  padding: 4px 6px;
-}
-
-.dir-title {
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  letter-spacing: 0.5px;
-  margin-right: 2px;
-}
-
-.dir-btn {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 4px 2px;
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.dir-btn:hover {
-  background: rgba(0, 242, 254, 0.12);
-  border-color: var(--accent-cyan);
-  color: #ffffff;
-}
-
-.dir-btn.active {
-  background: rgba(0, 242, 254, 0.25);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-  box-shadow: 0 0 8px rgba(0, 242, 254, 0.35);
-  font-weight: 700;
-}
-
 /* Modals */
 .modal-overlay {
   position: fixed;

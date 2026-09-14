@@ -512,15 +512,6 @@ class ActionStageRenderer {
     this.monitorTitleText = document.getElementById('monitor-title-text');
     this.labelIdle = document.getElementById('label-anim-idle');
     this.labelWalk = document.getElementById('label-anim-walk');
-    this.labelAttack = document.getElementById('label-anim-attack');
-
-    // Direction Switcher DOM References
-    this.dirTitleText = document.getElementById('dir-title-text');
-    this.btnDirSouth = document.getElementById('btn-dir-south');
-    this.btnDirNorth = document.getElementById('btn-dir-north');
-    this.btnDirWest = document.getElementById('btn-dir-west');
-    this.btnDirEast = document.getElementById('btn-dir-east');
-
     this.setupListeners();
     this.updateHUD();
   }
@@ -543,34 +534,11 @@ class ActionStageRenderer {
         sfx.playAttack();
       });
     }
-
-    // Direction button events
-    const dirBtns = [
-      { el: this.btnDirSouth, dir: 'south' },
-      { el: this.btnDirNorth, dir: 'north' },
-      { el: this.btnDirWest, dir: 'west' },
-      { el: this.btnDirEast, dir: 'east' }
-    ];
-
-    dirBtns.forEach(({ el, dir }) => {
-      if (el) {
-        el.addEventListener('click', () => {
-          this.setFacing(dir, true);
-        });
-      }
-    });
   }
 
   setFacing(dir, syncToBoard = false) {
-    if (this.facing === dir) return;
-    this.facing = dir;
-    if (this.state === 'walk') {
-      this.initSpeedlines();
-    }
-    this.updateHUD();
-    if (syncToBoard && this.game && this.game.state && this.game.state.guard) {
-      this.game.state.guard.facing = dir;
-    }
+    // Single unified front view
+    this.facing = 'south';
   }
 
   setState(newState, duration = 0) {
@@ -587,7 +555,6 @@ class ActionStageRenderer {
 
   initSpeedlines() {
     this.speedlines = [];
-    const isHoriz = (this.facing === 'east' || this.facing === 'west');
     for (let i = 0; i < 22; i++) {
       this.speedlines.push({
         x: Math.random() * 340,
@@ -628,36 +595,16 @@ class ActionStageRenderer {
     if (this.state === 'idle' && this.btnIdle) this.btnIdle.classList.add('active');
     if (this.state === 'walk' && this.btnWalk) this.btnWalk.classList.add('active');
     if (this.state === 'attack' && this.btnAttack) this.btnAttack.classList.add('active');
-
-    // Update direction buttons active state
-    const dirMap = {
-      south: this.btnDirSouth,
-      north: this.btnDirNorth,
-      west: this.btnDirWest,
-      east: this.btnDirEast
-    };
-    Object.values(dirMap).forEach(btn => {
-      if (btn) btn.classList.remove('active');
-    });
-    if (dirMap[this.facing]) {
-      dirMap[this.facing].classList.add('active');
-    }
   }
 
   updateLanguage(lang) {
     const isZh = (lang === 'zh');
-    const t = I18N[lang] || I18N.zh;
     if (this.monitorTitleText) {
       this.monitorTitleText.innerText = isZh ? '战术动作监视 · HIVE GUARD' : 'TACTICAL MONITOR · HIVE GUARD';
     }
     if (this.labelIdle) this.labelIdle.innerText = isZh ? '待机' : 'Idle';
     if (this.labelWalk) this.labelWalk.innerText = isZh ? '行走' : 'Walk';
     if (this.labelAttack) this.labelAttack.innerText = isZh ? '攻击' : 'Attack';
-    if (this.dirTitleText) this.dirTitleText.innerText = t.dirTitle || (isZh ? '视角/朝向:' : 'Facing:');
-    if (this.btnDirSouth) this.btnDirSouth.innerText = t.dirSouth || 'S 正面';
-    if (this.btnDirNorth) this.btnDirNorth.innerText = t.dirNorth || 'N 背面';
-    if (this.btnDirWest) this.btnDirWest.innerText = t.dirWest || 'W 左侧';
-    if (this.btnDirEast) this.btnDirEast.innerText = t.dirEast || 'E 右侧';
     this.updateHUD();
   }
 
@@ -716,86 +663,42 @@ class ActionStageRenderer {
       }
     }
 
-    // Overhauled 4-Directional Predator Attack State Sequencing
+    // Predator Attack State Sequencing (Front View)
     if (this.state === 'attack') {
       this.attackElapsed = (this.stateDuration - this.stateTimer);
 
-      // Phase 1: Forward explosive slash projectiles erupt at 0.24s
+      // Phase 1: Dual crossed explosive slash projectiles erupt at 0.24s
       if (this.attackElapsed >= 0.24 && this.attackPhase === 0) {
         this.attackPhase = 1;
-        if (this.facing === 'east') {
-          this.slashArcs.push({
-            cx: 215, cy: 145, radius: 82,
-            startAngle: -Math.PI * 0.75, endAngle: Math.PI * 0.22,
-            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
-          });
-          this.slashArcs.push({
-            cx: 225, cy: 175, radius: 96,
-            startAngle: Math.PI * 0.3, endAngle: Math.PI * 1.25,
-            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
-          });
-        } else if (this.facing === 'west') {
-          this.slashArcs.push({
-            cx: 125, cy: 145, radius: 82,
-            startAngle: -Math.PI * 0.25, endAngle: Math.PI * 0.75,
-            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
-          });
-          this.slashArcs.push({
-            cx: 115, cy: 175, radius: 96,
-            startAngle: Math.PI * 0.7, endAngle: -Math.PI * 0.25,
-            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
-          });
-        } else if (this.facing === 'north') {
-          // Lunging forward into the screen / north: upward crescent blades
-          this.slashArcs.push({
-            cx: 145, cy: 115, radius: 84,
-            startAngle: -Math.PI * 0.95, endAngle: -Math.PI * 0.05,
-            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
-          });
-          this.slashArcs.push({
-            cx: 195, cy: 115, radius: 92,
-            startAngle: -Math.PI * 0.9, endAngle: -Math.PI * 0.1,
-            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
-          });
-        } else if (this.facing === 'south') {
-          // Lunging towards camera / south: downward crescent blades
-          this.slashArcs.push({
-            cx: 145, cy: 225, radius: 84,
-            startAngle: Math.PI * 0.05, endAngle: Math.PI * 0.95,
-            color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.042
-          });
-          this.slashArcs.push({
-            cx: 195, cy: 225, radius: 92,
-            startAngle: Math.PI * 0.1, endAngle: Math.PI * 0.9,
-            color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.042
-          });
-        }
+        // Sweeping X-cleave across character's front
+        this.slashArcs.push({
+          cx: 140, cy: 165, radius: 92,
+          startAngle: -Math.PI * 0.65, endAngle: Math.PI * 0.25,
+          color: '#00f2fe', glow: '#4facfe', life: 1.0, decay: 0.040
+        });
+        this.slashArcs.push({
+          cx: 200, cy: 165, radius: 92,
+          startAngle: Math.PI * 0.75, endAngle: Math.PI * 1.65,
+          color: '#ffb800', glow: '#ff8800', life: 1.0, decay: 0.040
+        });
       }
 
       // Phase 2: Forward Impact Burst & Laser Cleave at 0.44s
       if (this.attackElapsed >= 0.44 && this.attackPhase === 1) {
         this.attackPhase = 2;
         this.shake.timer = 0.35;
-        this.shake.intensity = 16;
+        this.shake.intensity = 18;
         
-        let targetX = 245, targetY = 160;
-        let blastDx = 3.0, blastDy = 0;
-        if (this.facing === 'west') {
-          targetX = 95; targetY = 160; blastDx = -3.0; blastDy = 0;
-        } else if (this.facing === 'north') {
-          targetX = 170; targetY = 85; blastDx = 0; blastDy = -3.5;
-        } else if (this.facing === 'south') {
-          targetX = 170; targetY = 245; blastDx = 0; blastDy = 3.5;
-        }
+        const targetX = 170, targetY = 175;
 
-        for (let k = 0; k < 42; k++) {
+        for (let k = 0; k < 46; k++) {
           const angle = Math.random() * Math.PI * 2;
-          const spd = 3.5 + Math.random() * 9.5;
+          const spd = 3.5 + Math.random() * 10;
           this.fxParticles.push({
-            x: targetX + (Math.random() - 0.5) * 20,
-            y: targetY + (Math.random() - 0.5) * 20,
-            vx: Math.cos(angle) * spd + blastDx,
-            vy: Math.sin(angle) * spd + blastDy,
+            x: targetX + (Math.random() - 0.5) * 24,
+            y: targetY + (Math.random() - 0.5) * 24,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd + 1.2,
             life: 1.0,
             decay: 0.022 + Math.random() * 0.028,
             size: 3.5 + Math.random() * 4.5,
@@ -805,36 +708,19 @@ class ActionStageRenderer {
       }
     }
 
-    // 4-Directional Walk Speedlines
+    // Walk Speedlines & Thrust Particles (Front View)
     if (this.state === 'walk') {
       this.speedlines.forEach(l => {
-        if (this.facing === 'east') {
-          l.x -= l.speed;
-          if (l.x + l.len < 0) { l.x = 340 + Math.random() * 30; l.y = Math.random() * 340; }
-        } else if (this.facing === 'west') {
-          l.x += l.speed;
-          if (l.x > 340) { l.x = -l.len - Math.random() * 30; l.y = Math.random() * 340; }
-        } else if (this.facing === 'north') {
-          l.y += l.speed;
-          if (l.y > 340) { l.y = -l.len - Math.random() * 30; l.x = Math.random() * 340; }
-        } else if (this.facing === 'south') {
-          l.y -= l.speed;
-          if (l.y + l.len < 0) { l.y = 340 + Math.random() * 30; l.x = Math.random() * 340; }
-        }
+        l.y += l.speed;
+        if (l.y > 340) { l.y = -l.len - Math.random() * 30; l.x = Math.random() * 340; }
       });
 
       if (Math.random() < 0.65) {
-        let spawnVx = 0, spawnVy = 0;
-        if (this.facing === 'east') spawnVx = -4 - Math.random() * 4;
-        else if (this.facing === 'west') spawnVx = 4 + Math.random() * 4;
-        else if (this.facing === 'north') spawnVy = 4 + Math.random() * 4;
-        else if (this.facing === 'south') spawnVy = -4 - Math.random() * 4;
-
         this.fxParticles.push({
-          x: 170 + (Math.random() - 0.5) * 30,
-          y: 200 + (Math.random() - 0.5) * 30,
-          vx: spawnVx,
-          vy: spawnVy,
+          x: 170 + (Math.random() - 0.5) * 40,
+          y: 220 + (Math.random() - 0.5) * 20,
+          vx: (Math.random() - 0.5) * 2.5,
+          vy: 3.5 + Math.random() * 4.5,
           life: 1.0,
           decay: 0.055,
           size: 2.5 + Math.random() * 2.5,
@@ -932,7 +818,6 @@ class ActionStageRenderer {
 
   drawSpeedlines(ctx) {
     ctx.save();
-    const isHoriz = (this.facing === 'east' || this.facing === 'west');
     this.speedlines.forEach(l => {
       ctx.globalAlpha = l.alpha;
       ctx.strokeStyle = '#00f2fe';
@@ -940,13 +825,8 @@ class ActionStageRenderer {
       ctx.shadowColor = '#00f2fe';
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      if (isHoriz) {
-        ctx.moveTo(l.x, l.y);
-        ctx.lineTo(l.x + l.len, l.y);
-      } else {
-        ctx.moveTo(l.x, l.y);
-        ctx.lineTo(l.x, l.y + l.len);
-      }
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(l.x, l.y + l.len);
       ctx.stroke();
     });
     ctx.restore();
@@ -998,151 +878,72 @@ class ActionStageRenderer {
   }
 
   drawCharacter(ctx, cx, cy) {
-    // Select active directional sprite
-    let curSprite = null;
-    let isFlipped = false;
-
-    if (this.facing === 'south') {
-      curSprite = this.sprites.front;
-    } else if (this.facing === 'north') {
-      curSprite = this.sprites.back;
-    } else if (this.facing === 'east') {
-      curSprite = this.sprites.side;
-      isFlipped = true; // Left-facing sprite mirrored to face right (East)
-    } else if (this.facing === 'west') {
-      curSprite = this.sprites.side;
-      isFlipped = false; // Left-facing sprite used directly to face left (West)
-    }
-
-    if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) {
-      curSprite = this.sprites.front;
-      if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) return;
-    }
+    const curSprite = this.sprites.front;
+    if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) return;
 
     ctx.save();
 
     let hoverY = 0;
-    let surgeX = 0;
     let surgeY = 0;
-    let tilt = 0;
     let scaleX = 1;
     let scaleY = 1;
-    let armRotation = 0;
-    let drawArticulatedArm = false;
 
-    // 1. 4-Directional Kinetic Motion Calculations
+    // 1. Kinetic Motion Calculations (Front View)
     if (this.state === 'idle') {
       hoverY = Math.sin(this.animTime * 2.5) * 8;
       scaleX = 1 + Math.sin(this.animTime * 2.5) * 0.02;
       scaleY = 1 - Math.sin(this.animTime * 2.5) * 0.015;
-      tilt = (this.facing === 'east' ? 1 : (this.facing === 'west' ? -1 : 0)) * Math.sin(this.animTime * 1.5) * 0.02;
-      armRotation = Math.sin(this.animTime * 2.5) * 0.05;
     } else if (this.state === 'walk') {
-      if (this.facing === 'east') {
-        hoverY = Math.sin(this.animTime * 8) * 6;
-        surgeX = Math.sin(this.animTime * 8) * 8 + 14;
-        tilt = 0.16;
-        scaleX = 0.98;
-      } else if (this.facing === 'west') {
-        hoverY = Math.sin(this.animTime * 8) * 6;
-        surgeX = -(Math.sin(this.animTime * 8) * 8 + 14);
-        tilt = -0.16;
-        scaleX = 0.98;
-      } else if (this.facing === 'north') {
-        surgeY = -(Math.sin(this.animTime * 8) * 8 + 16);
-        scaleX = 0.96;
-        scaleY = 1.02;
-      } else if (this.facing === 'south') {
-        surgeY = +(Math.sin(this.animTime * 8) * 8 + 16);
-        scaleX = 1.02;
-        scaleY = 0.98;
-      }
-      armRotation = 0.15 + Math.sin(this.animTime * 8) * 0.1;
+      hoverY = Math.sin(this.animTime * 8) * 7;
+      surgeY = Math.sin(this.animTime * 4) * 6 + 10;
+      scaleX = 0.98 + Math.sin(this.animTime * 4) * 0.02;
+      scaleY = 1.02 - Math.sin(this.animTime * 4) * 0.02;
     } else if (this.state === 'attack') {
-      drawArticulatedArm = (this.facing !== 'north'); // Back view already has arms in pose
       if (this.attackElapsed < 0.24) {
-        // Phase 0: Forward Predator Crouch (coiling in the direction of attack)
+        // Phase 0: Coiled Predator Crouch (lowering forward)
         const p = this.attackElapsed / 0.24;
-        if (this.facing === 'east') {
-          surgeX = -10 * p;
-          hoverY = 6 * p;
-          tilt = 0.22 * p;
-        } else if (this.facing === 'west') {
-          surgeX = 10 * p;
-          hoverY = 6 * p;
-          tilt = -0.22 * p;
-        } else if (this.facing === 'north') {
-          surgeY = 12 * p;
-          scaleX = 1.08;
-          scaleY = 0.92;
-        } else if (this.facing === 'south') {
-          surgeY = -12 * p;
-          scaleX = 0.92;
-          scaleY = 1.08;
-        }
-        armRotation = -0.75 * p;
+        surgeY = -12 * p;
+        hoverY = 6 * p;
+        scaleX = 1 + 0.08 * p;
+        scaleY = 1 - 0.06 * p;
       } else if (this.attackElapsed < 0.48) {
-        // Phase 1: Violent Forward Lunge in facing direction
+        // Phase 1: Violent Forward Lunge towards viewer
         const p = (this.attackElapsed - 0.24) / 0.24;
-        if (this.facing === 'east') {
-          surgeX = -10 + 90 * p;
-          hoverY = 6 - 2 * p;
-          tilt = 0.22 + 0.16 * p;
-        } else if (this.facing === 'west') {
-          surgeX = 10 - 90 * p;
-          hoverY = 6 - 2 * p;
-          tilt = -0.22 - 0.16 * p;
-        } else if (this.facing === 'north') {
-          surgeY = 12 - 92 * p;
-          scaleX = 0.95;
-          scaleY = 1.08;
-        } else if (this.facing === 'south') {
-          surgeY = -12 + 92 * p;
-          scaleX = 1.08;
-          scaleY = 0.95;
-        }
-        armRotation = -0.75 + 1.85 * p;
+        surgeY = -12 + 46 * p;
+        hoverY = 6 - 2 * p;
+        scaleX = 1.08 + 0.12 * p;
+        scaleY = 0.94 + 0.16 * p;
       } else {
-        // Phase 2 & 3: Lethal Stance & Glide Return
+        // Phase 2 & 3: Dominant Strike Hold & Smooth Return
         const p = Math.min(1, (this.attackElapsed - 0.48) / 1.12);
         const ease = 1 - Math.pow(1 - p, 3);
-        if (this.facing === 'east') {
-          surgeX = 80 * (1 - ease);
-          hoverY = 4 * (1 - ease);
-          tilt = 0.38 * (1 - ease);
-        } else if (this.facing === 'west') {
-          surgeX = -80 * (1 - ease);
-          hoverY = 4 * (1 - ease);
-          tilt = -0.38 * (1 - ease);
-        } else if (this.facing === 'north') {
-          surgeY = -80 * (1 - ease);
-        } else if (this.facing === 'south') {
-          surgeY = 80 * (1 - ease);
-        }
-        armRotation = 1.1 * (1 - ease);
+        surgeY = 34 * (1 - ease);
+        hoverY = 4 * (1 - ease);
+        scaleX = 1 + 0.14 * (1 - ease);
+        scaleY = 1 + 0.08 * (1 - ease);
       }
     }
 
     // Dynamic ground contact shadow
     const shadowScale = Math.max(0.5, 1 - (hoverY / 35));
     ctx.beginPath();
-    ctx.ellipse(cx + surgeX * 0.4, cy + 96 + surgeY * 0.3, 56 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 96 + surgeY * 0.25, 58 * shadowScale, 15 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.fill();
 
     // Radial Backlight Aura
-    const auraGrad = ctx.createRadialGradient(cx + surgeX, cy - 20 + hoverY + surgeY, 15, cx + surgeX, cy - 20 + hoverY + surgeY, 125);
+    const auraGrad = ctx.createRadialGradient(cx, cy - 20 + hoverY + surgeY, 15, cx, cy - 20 + hoverY + surgeY, 130);
     if (this.state === 'attack') {
-      auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.5)');
-      auraGrad.addColorStop(0.5, 'rgba(255, 184, 0, 0.25)');
+      auraGrad.addColorStop(0, 'rgba(255, 51, 102, 0.55)');
+      auraGrad.addColorStop(0.5, 'rgba(255, 184, 0, 0.3)');
     } else {
-      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.35)');
-      auraGrad.addColorStop(0.5, 'rgba(79, 172, 254, 0.15)');
+      auraGrad.addColorStop(0, 'rgba(0, 242, 254, 0.38)');
+      auraGrad.addColorStop(0.5, 'rgba(79, 172, 254, 0.18)');
     }
     auraGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = auraGrad;
     ctx.beginPath();
-    ctx.arc(cx + surgeX, cy - 20 + hoverY + surgeY, 125, 0, Math.PI * 2);
+    ctx.arc(cx, cy - 20 + hoverY + surgeY, 130, 0, Math.PI * 2);
     ctx.fill();
 
     // Base height normalization
@@ -1152,19 +953,10 @@ class ActionStageRenderer {
 
     // Ghosting motion trails for Walk
     if (this.state === 'walk') {
-      [18, 36].forEach((offset, idx) => {
+      [14, 28].forEach((offset, idx) => {
         ctx.save();
-        ctx.globalAlpha = 0.24 - idx * 0.11;
-        let trailX = cx + surgeX;
-        let trailY = cy + hoverY + surgeY;
-        if (this.facing === 'east') trailX -= offset;
-        else if (this.facing === 'west') trailX += offset;
-        else if (this.facing === 'north') trailY += offset;
-        else if (this.facing === 'south') trailY -= offset;
-
-        ctx.translate(trailX, trailY);
-        ctx.rotate(tilt);
-        if (isFlipped) ctx.scale(-1, 1);
+        ctx.globalAlpha = 0.22 - idx * 0.10;
+        ctx.translate(cx, cy + hoverY + surgeY - offset);
         ctx.drawImage(curSprite, -charW / 2, -charH / 2 - 10, charW, charH);
         ctx.restore();
       });
@@ -1172,23 +964,14 @@ class ActionStageRenderer {
 
     // Main Character Base Sprite
     ctx.save();
-    ctx.translate(cx + surgeX, cy + hoverY + surgeY);
-    ctx.rotate(tilt);
-    if (isFlipped) {
-      ctx.scale(-1, 1);
-    }
+    ctx.translate(cx, cy + hoverY + surgeY);
 
     // Dynamic Skirt/Tail wave physics
     const skirtWave = Math.sin(this.animTime * 3) * 3;
     ctx.drawImage(curSprite, -charW / 2 + skirtWave * 0.2, -charH / 2 - 10, charW, charH);
 
-    // Glowing Eyes / Visor / Core based on Facing
-    this.drawOperativeGlows(ctx, charW, charH, this.facing);
-
-    // Articulated Arm (for east, west, south)
-    if (drawArticulatedArm && this.sprites.arm && this.sprites.arm.complete && this.sprites.arm.naturalWidth > 0) {
-      this.drawArticulatedArm(ctx, charW, charH, armRotation);
-    }
+    // Glowing Eyes / Visor / Core
+    this.drawOperativeGlows(ctx, charW, charH);
 
     ctx.restore();
 
@@ -1210,92 +993,25 @@ class ActionStageRenderer {
     ctx.restore();
   }
 
-  // Dynamic Visor & Energy Cores depending on Facing Angle
-  drawOperativeGlows(ctx, charW, charH, facing) {
-    if (facing === 'south') {
-      // Front: Dual cyan optics & chest energy core
-      ctx.beginPath();
-      ctx.arc(-5, -charH / 2 + 38, 2.2, 0, Math.PI * 2);
-      ctx.arc(6, -charH / 2 + 38, 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = '#00f2fe';
-      ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 8;
-      ctx.fill();
-
-      // Chest cavity core
-      const corePulse = 0.6 + Math.sin(this.animTime * 4) * 0.4;
-      ctx.beginPath();
-      ctx.arc(0, -charH / 2 + 82, 5, 0, Math.PI * 2);
-      ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
-      ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
-      ctx.shadowBlur = 12 * corePulse;
-      ctx.fill();
-    } else if (facing === 'north') {
-      // Back: Glowing spinal power conduit & twin shoulder exhaust nodes
-      ctx.beginPath();
-      ctx.arc(-14, -charH / 2 + 56, 3, 0, Math.PI * 2);
-      ctx.arc(14, -charH / 2 + 56, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffb800';
-      ctx.shadowColor = '#ffb800';
-      ctx.shadowBlur = 10;
-      ctx.fill();
-
-      // Spinal line
-      ctx.beginPath();
-      ctx.moveTo(0, -charH / 2 + 52);
-      ctx.lineTo(0, -charH / 2 + 105);
-      ctx.strokeStyle = '#00f2fe';
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-    } else {
-      // Side (East or West): Monocular Visor & side chest core
-      // When unflipped (facing West), face/chest is on the left (negative X).
-      // When flipped (facing East via scale(-1, 1)), negative X automatically mirrors to positive X.
-      const visorX = -charW * 0.13;
-      ctx.beginPath();
-      ctx.arc(visorX, -charH / 2 + 38, 2.8, 0, Math.PI * 2);
-      ctx.fillStyle = '#00f2fe';
-      ctx.shadowColor = '#00f2fe';
-      ctx.shadowBlur = 8;
-      ctx.fill();
-
-      const coreX = -charW * 0.12;
-      ctx.beginPath();
-      ctx.arc(coreX, -charH / 2 + 80, 4, 0, Math.PI * 2);
-      ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#ffb800';
-      ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#ffb800';
-      ctx.shadowBlur = 10;
-      ctx.fill();
-    }
-  }
-
-  // Articulated Claw Arm with Forearm Pivot & Claw Strike
-  drawArticulatedArm(ctx, charW, charH, rotation) {
-    ctx.save();
-    // Shoulder anchor socket on the forward-facing side of the torso
-    const shoulderX = -charW * 0.14;
-    const shoulderY = -charH / 2 + 68;
-
-    ctx.translate(shoulderX, shoulderY);
-    ctx.rotate(rotation);
-
-    const armH = charH * 0.48;
-    const armW = (armH / this.sprites.arm.naturalHeight) * this.sprites.arm.naturalWidth;
-
-    ctx.drawImage(this.sprites.arm, -armW * 0.5, -6, armW, armH);
-
-    // Glowing tip at claw ends
-    const clawTipY = armH - 12;
+  // Glowing Eyes & Chest Energy Core (Front View)
+  drawOperativeGlows(ctx, charW, charH) {
+    // Front: Dual cyan optics
     ctx.beginPath();
-    ctx.arc(0, clawTipY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff3366';
-    ctx.shadowColor = '#ff3366';
-    ctx.shadowBlur = 12;
+    ctx.arc(-5, -charH / 2 + 38, 2.4, 0, Math.PI * 2);
+    ctx.arc(6, -charH / 2 + 38, 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowBlur = this.state === 'attack' ? 12 : 8;
     ctx.fill();
 
-    ctx.restore();
+    // Chest cavity core
+    const corePulse = 0.6 + Math.sin(this.animTime * 4) * 0.4;
+    ctx.beginPath();
+    ctx.arc(0, -charH / 2 + 82, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#00f2fe';
+    ctx.shadowBlur = 14 * corePulse;
+    ctx.fill();
   }
 
   drawAttackFX(ctx) {
@@ -1330,14 +1046,7 @@ class ActionStageRenderer {
       const p = (this.attackElapsed - 0.44) / 0.41;
       const ringRadius = 15 + p * 125;
       
-      let targetX = 245, targetY = 160;
-      if (this.facing === 'west') {
-        targetX = 95; targetY = 160;
-      } else if (this.facing === 'north') {
-        targetX = 170; targetY = 85;
-      } else if (this.facing === 'south') {
-        targetX = 170; targetY = 245;
-      }
+      const targetX = 170, targetY = 175;
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - p);
@@ -1554,7 +1263,7 @@ class Game {
       guard: { 
         x: lvl.guardStart.x, 
         y: lvl.guardStart.y, 
-        facing: 'north',
+        facing: 'south',
         steps: this.maxSteps,
         atGoal: false,
         history: [{ x: lvl.guardStart.x, y: lvl.guardStart.y }]
@@ -1566,10 +1275,6 @@ class Game {
       isWon: false,
       isLost: false
     };
-
-    if (this.actionStage) {
-      this.actionStage.setFacing('north');
-    }
 
     this.updateLevelTitle();
     this.updateHUD();
@@ -1901,17 +1606,7 @@ class Game {
         return;
       }
 
-      // Update operative facing direction based on movement vector
-      const moveDx = tx - char.x;
-      const moveDy = ty - char.y;
-      if (Math.abs(moveDx) > Math.abs(moveDy)) {
-        char.facing = moveDx > 0 ? 'east' : 'west';
-      } else if (moveDy !== 0) {
-        char.facing = moveDy > 0 ? 'north' : 'south';
-      }
-      if (this.activeRole === 'guard' && this.actionStage) {
-        this.actionStage.setFacing(char.facing);
-      }
+      char.facing = 'south';
 
       const isBacktrack = char.history && char.history.length >= 2 && 
                           char.history[char.history.length - 2].x === tx && 
@@ -2814,24 +2509,8 @@ class Game {
       ctx.restore();
     }
 
-    // Determine directional sprite for Hive Guard
-    const facing = char.facing || 'north';
-    let guardImg = this.guardSprites ? this.guardSprites.front : null;
-    let flipX = false;
-
-    if (this.guardSprites) {
-      if (facing === 'north') {
-        guardImg = this.guardSprites.back;
-      } else if (facing === 'south') {
-        guardImg = this.guardSprites.front;
-      } else if (facing === 'east') {
-        guardImg = this.guardSprites.side;
-        flipX = true; // Mirror left-facing sprite to face East (right)
-      } else if (facing === 'west') {
-        guardImg = this.guardSprites.side;
-        flipX = false; // Left-facing sprite used directly to face West (left)
-      }
-    }
+    // Figurine Sprite for Hive Guard (Unified Front View)
+    const guardImg = this.guardSprites ? this.guardSprites.front : null;
 
     if (role === 'guard' && guardImg && guardImg.complete && guardImg.naturalWidth > 0) {
       // Substantially enlarged 3D Hive Guard Figurine on Isometric Board
@@ -2858,65 +2537,26 @@ class Game {
       ctx.scale(breathScale, 1);
       ctx.translate(-x, -(py - 32));
 
-      // Draw directional sprite with horizontal mirroring if facing west
-      if (flipX) {
-        ctx.save();
-        ctx.translate(x, 0);
-        ctx.scale(-1, 1);
-        ctx.translate(-x, 0);
-        ctx.drawImage(guardImg, spriteX, spriteY, spriteW, spriteH);
-        ctx.restore();
-      } else {
-        ctx.drawImage(guardImg, spriteX, spriteY, spriteW, spriteH);
-      }
+      // Draw front sprite
+      ctx.drawImage(guardImg, spriteX, spriteY, spriteW, spriteH);
       ctx.restore();
 
-      // Glowing directional indicators on figurine
-      if (facing === 'south') {
-        const eyeY = spriteY + spriteH * 0.18;
-        ctx.beginPath();
-        ctx.arc(x - 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
-        ctx.arc(x + 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
-        ctx.fillStyle = '#00f2fe';
-        ctx.shadowColor = '#00f2fe';
-        ctx.shadowBlur = 6;
-        ctx.fill();
+      // Glowing optics and core on front figurine
+      const eyeY = spriteY + spriteH * 0.18;
+      ctx.beginPath();
+      ctx.arc(x - 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
+      ctx.arc(x + 3 * rowScale, eyeY, 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 6;
+      ctx.fill();
 
-        ctx.beginPath();
-        ctx.arc(x, spriteY + spriteH * 0.32, 2.5 * rowScale, 0, Math.PI * 2);
-        ctx.fillStyle = '#00f2fe';
-        ctx.shadowColor = '#00f2fe';
-        ctx.shadowBlur = 8;
-        ctx.fill();
-      } else if (facing === 'north') {
-        const nodeY = spriteY + spriteH * 0.22;
-        ctx.beginPath();
-        ctx.arc(x - 6 * rowScale, nodeY, 2, 0, Math.PI * 2);
-        ctx.arc(x + 6 * rowScale, nodeY, 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffb800';
-        ctx.shadowColor = '#ffb800';
-        ctx.shadowBlur = 6;
-        ctx.fill();
-
-        // Spine glow
-        ctx.beginPath();
-        ctx.moveTo(x, spriteY + spriteH * 0.22);
-        ctx.lineTo(x, spriteY + spriteH * 0.45);
-        ctx.strokeStyle = '#00f2fe';
-        ctx.lineWidth = 1.8;
-        ctx.shadowColor = '#00f2fe';
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-      } else {
-        const visorX = x + (facing === 'east' ? 4 : -4) * rowScale;
-        const visorY = spriteY + spriteH * 0.18;
-        ctx.beginPath();
-        ctx.arc(visorX, visorY, 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#00f2fe';
-        ctx.shadowColor = '#00f2fe';
-        ctx.shadowBlur = 6;
-        ctx.fill();
-      }
+      ctx.beginPath();
+      ctx.arc(x, spriteY + spriteH * 0.32, 2.5 * rowScale, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f2fe';
+      ctx.shadowColor = '#00f2fe';
+      ctx.shadowBlur = 8;
+      ctx.fill();
 
       // Holographic Step Count Floating Badge
       ctx.beginPath();
