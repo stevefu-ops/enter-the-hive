@@ -1008,9 +1008,10 @@ class ActionStageRenderer {
       curSprite = this.sprites.back;
     } else if (this.facing === 'east') {
       curSprite = this.sprites.side;
+      isFlipped = true; // Left-facing sprite mirrored to face right (East)
     } else if (this.facing === 'west') {
       curSprite = this.sprites.side;
-      isFlipped = true;
+      isFlipped = false; // Left-facing sprite used directly to face left (West)
     }
 
     if (!curSprite || !curSprite.complete || curSprite.naturalWidth === 0) {
@@ -1249,16 +1250,20 @@ class ActionStageRenderer {
       ctx.shadowBlur = 10;
       ctx.stroke();
     } else {
-      // Side (East or West): Monocular Visor & side shoulder exhaust
+      // Side (East or West): Monocular Visor & side chest core
+      // When unflipped (facing West), face/chest is on the left (negative X).
+      // When flipped (facing East via scale(-1, 1)), negative X automatically mirrors to positive X.
+      const visorX = -charW * 0.13;
       ctx.beginPath();
-      ctx.arc(6, -charH / 2 + 38, 2.8, 0, Math.PI * 2);
+      ctx.arc(visorX, -charH / 2 + 38, 2.8, 0, Math.PI * 2);
       ctx.fillStyle = '#00f2fe';
       ctx.shadowColor = '#00f2fe';
       ctx.shadowBlur = 8;
       ctx.fill();
 
+      const coreX = -charW * 0.12;
       ctx.beginPath();
-      ctx.arc(2, -charH / 2 + 80, 4, 0, Math.PI * 2);
+      ctx.arc(coreX, -charH / 2 + 80, 4, 0, Math.PI * 2);
       ctx.fillStyle = this.state === 'attack' ? '#ff3366' : '#ffb800';
       ctx.shadowColor = this.state === 'attack' ? '#ff3366' : '#ffb800';
       ctx.shadowBlur = 10;
@@ -1269,8 +1274,8 @@ class ActionStageRenderer {
   // Articulated Claw Arm with Forearm Pivot & Claw Strike
   drawArticulatedArm(ctx, charW, charH, rotation) {
     ctx.save();
-    // Shoulder anchor socket
-    const shoulderX = 14;
+    // Shoulder anchor socket on the forward-facing side of the torso
+    const shoulderX = -charW * 0.14;
     const shoulderY = -charH / 2 + 68;
 
     ctx.translate(shoulderX, shoulderY);
@@ -2821,9 +2826,10 @@ class Game {
         guardImg = this.guardSprites.front;
       } else if (facing === 'east') {
         guardImg = this.guardSprites.side;
+        flipX = true; // Mirror left-facing sprite to face East (right)
       } else if (facing === 'west') {
         guardImg = this.guardSprites.side;
-        flipX = true;
+        flipX = false; // Left-facing sprite used directly to face West (left)
       }
     }
 
@@ -2902,7 +2908,7 @@ class Game {
         ctx.shadowBlur = 6;
         ctx.stroke();
       } else {
-        const visorX = x + (flipX ? -4 : 4) * rowScale;
+        const visorX = x + (facing === 'east' ? 4 : -4) * rowScale;
         const visorY = spriteY + spriteH * 0.18;
         ctx.beginPath();
         ctx.arc(visorX, visorY, 2, 0, Math.PI * 2);
